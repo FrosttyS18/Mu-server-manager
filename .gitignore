@@ -1,0 +1,44 @@
+# Arquivos de Build/Release - NAO enviar para o Git (muito grandes)
+**/release/
+**/release-client/
+**/release2/
+**/release_old_*/
+**/backup_*/
+**/dist/
+**/out/
+
+# Executáveis e Instaladores
+*.exe
+*.msi
+*.zip
+*.blockmap
+*.yml.builder-debug
+builder-debug.yml
+
+# Portable builds
+**/win-unpacked/
+**/Portable/
+
+# Node modules
+**/node_modules/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts nativos
+**/native/**/build/
+**/native/**/bin/
+*.node
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# User data
+userData/

@@ -1,0 +1,3326 @@
+import React from "react";
+import { Icon } from "./components/Icon";
+import logoSmf from "./assets/Icons/logo_smf.svg";
+import { useGlowPointer, useMetrics, useCrashDetection, LanguageContext, useTranslation } from "./hooks";
+import { ConfirmModal, CrashModal } from "./components/Modals";
+import { CustomSelect } from "./components/CustomSelect";
+import { getTranslation } from "./i18n/translations";
+
+// FLAG DE VERSÃO: Define se é versão ADMIN ou versão de USUÁRIO
+// true = Versão Admin (auto-click ativo por padrão, opção visível)
+// false = Versão Usuário (auto-click oculto e desativado)
+const IS_ADMIN_VERSION = true;
+
+// Tempo padrão (ms) para deixar o executável VISÍVEL após o start.
+// Isso dá tempo de clicar no modal "OK" (MUDEVS) antes do app ocultar a janela.
+const DEFAULT_STARTUP_DELAY_MS = 3500;
+
+// Sidebar / Branding (persistente no localStorage)
+const STORAGE_KEYS = {
+  serverName: "msm.serverName",
+  logoDataUrl: "msm.logoDataUrl",
+  language: "msm.language",
+  autoOKDialogs: "msm.autoOKDialogs",
+};
+
+const DEFAULT_SERVER_NAME = "Novo Nome";
+const SERVER_NAME_MAX_CHARS = 30;
+
+const PROCESSES = [
+  { name: "ChatServe.exe", running: false, checked: true, selected: true },
+  { name: "ConnectServe.exe", running: false, checked: true, selected: false },
+  { name: "DataServer.exe", running: false, checked: true, selected: false },
+  { name: "ExDataServer.exe", running: false, checked: true, selected: false },
+  { name: "JoinServer.exe", running: false, checked: true, selected: false },
+  { name: "GameServer.exe", running: false, checked: true, selected: false },
+  { name: "GameServerCS.exe", running: false, checked: true, selected: false },
+];
+
+export default function App() {
+  // Hook para spotlight effect
+  useGlowPointer();
+  
+  const [processes, setProcesses] = React.useState([]);
+  const [processesLoaded, setProcessesLoaded] = React.useState(false);
+  const [isStartingAll, setIsStartingAll] = React.useState(false); // Loading state
+  const [isRestartingAll, setIsRestartingAll] = React.useState(false); // Loading state
+  
+  // Settings States
+  const [language, setLanguage] = React.useState('pt-BR'); // 'pt-BR', 'en-US', 'es-ES'
+  const [autoOKDialogs, setAutoOKDialogs] = React.useState(IS_ADMIN_VERSION); // Auto-click OK em diálogos MUDevs (true para Admin, false para Usuário)
+  
+  // Função de tradução usando o state diretamente (não usa Context pois o App é quem cria o Provider)
+  const t = React.useCallback((key, params = {}) => {
+    return getTranslation(language, key, params);
+  }, [language]);
+  
+  // REF para sempre ter acesso aos processos atuais
+  const processesRef = React.useRef(processes);
+  React.useEffect(() => {
+    processesRef.current = processes;
+  }, [processes]);
+
+  // Console Modal
+  const [consoleModalOpen, setConsoleModalOpen] = React.useState(false);
+  const [consoleLogs, setConsoleLogs] = React.useState([]);
+  const MAX_LOGS = 50;
+
+  // Search (filtra a lista por nome)
+  const [searchQuery, setSearchQuery] = React.useState("");
+
+  // Drag and Drop - estados para controlar reordenação (Angular CDK style)
+  const [draggedIndex, setDraggedIndex] = React.useState(null);
+  const [dragOverIndex, setDragOverIndex] = React.useState(null);
+  const dragPreviewRef = React.useRef(null); // Elemento preview que segue o cursor
+  const draggedElementRef = React.useRef(null); // Elemento original sendo arrastado
+  const containerRef = React.useRef(null); // Referência ao container da lista
+  const dragOffsetRef = React.useRef({ x: 0, y: 0 }); // Offset do clique inicial dentro do elemento
+  const animationFrameRef = React.useRef(null); // Para requestAnimationFrame
+
+  // restart timer (reiniciar todos)
+  const restartTimerRef = React.useRef(null);
+
+  // UNDO state (snapshot do estado anterior)
+  const [undo, setUndo] = React.useState(null); // { prev: Process[], message: string }
+  const undoTimerRef = React.useRef(null);
+
+  // CONFIRM MODAL (custom)
+  const [confirmState, setConfirmState] = React.useState(null);
+  const confirmResolverRef = React.useRef(null);
+  // { title, message, confirmText, cancelText, tone }
+  
+  // Branding do sidebar (nome do servidor + logo)
+  const [serverName, setServerName] = React.useState(DEFAULT_SERVER_NAME);
+  const [editingServerName, setEditingServerName] = React.useState(false);
+  const [serverNameDraft, setServerNameDraft] = React.useState(DEFAULT_SERVER_NAME);
+  const [brandingReady, setBrandingReady] = React.useState(false);
+
+  const [logoDataUrl, setLogoDataUrl] = React.useState(null);
+  const logoInputRef = React.useRef(null);
+
+  // Carregar branding e configurações persistidas
+React.useEffect(() => {
+  try {
+    const savedName = localStorage.getItem(STORAGE_KEYS.serverName);
+    const savedLogo = localStorage.getItem(STORAGE_KEYS.logoDataUrl);
+    const savedLanguage = localStorage.getItem(STORAGE_KEYS.language);
+    const savedAutoOK = localStorage.getItem(STORAGE_KEYS.autoOKDialogs);
+
+    if (savedName && typeof savedName === "string") {
+      setServerName(savedName);
+      setServerNameDraft(savedName);
+    }
+    if (savedLogo && typeof savedLogo === "string") {
+      setLogoDataUrl(savedLogo);
+    }
+    if (savedLanguage && typeof savedLanguage === "string") {
+      setLanguage(savedLanguage);
+    }
+    // Auto OK Dialogs: só carrega/ativa se for versão ADMIN
+    if (IS_ADMIN_VERSION && savedAutoOK !== null) {
+      setAutoOKDialogs(savedAutoOK === 'true');
+    } else if (!IS_ADMIN_VERSION) {
+      setAutoOKDialogs(false); // Versão usuário sempre false
+    }
+  } catch {
+    // ignore
+  } finally {
+    // evita sobrescrever o storage no 1º mount
+    setBrandingReady(true);
+  }
+}, []);
+
+  // Persistir alterações
+  React.useEffect(() => {
+  if (!brandingReady) return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.serverName, serverName);
+  } catch {
+    // ignore
+  }
+}, [brandingReady, serverName]);
+
+  React.useEffect(() => {
+  if (!brandingReady) return;
+  try {
+    if (logoDataUrl) localStorage.setItem(STORAGE_KEYS.logoDataUrl, logoDataUrl);
+    else localStorage.removeItem(STORAGE_KEYS.logoDataUrl);
+  } catch {
+    // ignore
+  }
+}, [brandingReady, logoDataUrl]);
+
+  // Persistir idioma
+  React.useEffect(() => {
+  if (!brandingReady) return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.language, language);
+  } catch {
+    // ignore
+  }
+}, [brandingReady, language]);
+
+  // Persistir autoOKDialogs
+  React.useEffect(() => {
+  if (!brandingReady) return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.autoOKDialogs, autoOKDialogs.toString());
+  } catch {
+    // ignore
+  }
+}, [brandingReady, autoOKDialogs]);
+
+  const pickLogo = () => logoInputRef.current?.click();
+
+  const onLogoFileChange = (e) => {
+    const file = e.target?.files?.[0];
+    // permite selecionar o mesmo arquivo novamente
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type?.startsWith("image/")) return;
+
+    // Evita estourar localStorage com imagens gigantes
+    const MAX_BYTES = 5 * 1200 * 1200; // 4MB
+    if (file.size > MAX_BYTES) {
+      alert("Imagem muito grande. Use uma imagem de até 5MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") setLogoDataUrl(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const commitServerName = (raw) => {
+    const cleaned = String(raw ?? "").trim().slice(0, SERVER_NAME_MAX_CHARS);
+    const finalName = cleaned.length ? cleaned : DEFAULT_SERVER_NAME;
+    setServerName(finalName);
+    setServerNameDraft(finalName);
+    setEditingServerName(false);
+    try {
+      localStorage.setItem(STORAGE_KEYS.serverName, finalName);
+    } catch {
+      // ignore
+    }
+  };
+
+  
+const cancelServerNameEdit = () => {
+    setServerNameDraft(serverName);
+    setEditingServerName(false);
+  };
+// Se o app fechar enquanto está editando o nome, commit automático do draft
+  React.useEffect(() => {
+    const handler = () => {
+      if (!editingServerName) return;
+      try {
+        const cleaned = String(serverNameDraft ?? "").trim().slice(0, SERVER_NAME_MAX_CHARS);
+        const finalName = cleaned.length ? cleaned : DEFAULT_SERVER_NAME;
+        localStorage.setItem(STORAGE_KEYS.serverName, finalName);
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [editingServerName, serverNameDraft]);
+
+const api = React.useMemo(() => window.mu ?? window.electronAPI ?? window.api ?? {}, []);
+
+  // Listener para receber atualizações de métricas (a cada 4 segundos)
+  React.useEffect(() => {
+    if (typeof api.onMetricsUpdate !== "function") return;
+    
+    return api.onMetricsUpdate((metricsData) => {
+      setMetrics(metricsData);
+    });
+  }, [api]);
+
+
+const persistList = React.useCallback((list) => {
+  if (typeof api.saveProcesses !== "function") return;
+
+  // Não salvar estado "runtime" (running/checked/selected), só config.
+  const clean = (Array.isArray(list) ? list : []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    path: p.path,
+    // futuros campos:
+    delayMs: p.delayMs ?? DEFAULT_STARTUP_DELAY_MS,
+    args: p.args ?? "",
+    run: p.run ?? true,
+  }));
+
+  api.saveProcesses(clean);
+}, [api]);
+
+  const confirmDialog = React.useCallback(
+    ({
+      title = "Confirmar",
+      message = "Tem certeza?",
+      confirmText = "OK",
+      cancelText = "Cancelar",
+      tone = "danger", // "danger" | "primary"
+    }) => {
+      return new Promise((resolve) => {
+        confirmResolverRef.current = resolve;
+        setConfirmState({ title, message, confirmText, cancelText, tone });
+      });
+    },
+    []
+  );
+
+  const closeConfirm = React.useCallback((result) => {
+    if (confirmResolverRef.current) {
+      confirmResolverRef.current(result);
+      confirmResolverRef.current = null;
+    }
+    setConfirmState(null);
+  }, []);
+
+
+  React.useEffect(() => {
+    return () => {
+      if (restartTimerRef.current) window.clearTimeout(restartTimerRef.current);
+      if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+  React.useEffect(() => {
+  let alive = true;
+
+  (async () => {
+    try {
+      if (typeof api.loadProcesses !== "function") {
+        if (alive) setProcesses([]);
+        return;
+      }
+
+      const saved = await api.loadProcesses();
+      if (!alive) return;
+
+      // Se o arquivo ainda não existe (null) ou estiver inválido, mantém vazio
+      if (!Array.isArray(saved)) {
+        setProcesses([]);
+        return;
+      }
+
+      // garante id mesmo se vier "cru" do disco
+      setProcesses(
+        saved.map((p, i) => ({
+          ...p,
+          id: p.id ?? `p-${Date.now()}-${i}-${p.name ?? "process"}`,
+          // migração: versões antigas salvavam 1000ms, agora usamos um padrão maior para dar tempo do modal "OK"
+          delayMs: (p.delayMs == null || p.delayMs === 1000) ? DEFAULT_STARTUP_DELAY_MS : p.delayMs,
+
+          // runtime sempre reseta ao abrir
+          running: false,
+          checked: false,
+          selected: false,
+          windowHidden: false,
+        }))
+      );
+} catch {
+      if (alive) setProcesses([]);
+    } finally {
+      if (alive) setProcessesLoaded(true);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [api]);
+
+  React.useEffect(() => {
+    if (!confirmState) return;
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") closeConfirm(false);
+      if (e.key === "Enter") closeConfirm(true);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [confirmState, closeConfirm]);
+
+  const list = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return processes;
+    return processes.filter((p) => (p.name ?? "").toLowerCase().includes(q));
+  }, [processes, searchQuery]);
+
+  // Função para reordenar array (similar ao moveItemInArray do Angular CDK)
+  const moveItemInArray = React.useCallback((array, previousIndex, currentIndex) => {
+    const result = [...array];
+    const [removed] = result.splice(previousIndex, 1);
+    result.splice(currentIndex, 0, removed);
+    return result;
+  }, []);
+
+  // Handler para drop - reordena a lista completa (não apenas a filtrada)
+  const handleDrop = React.useCallback((previousIndex, currentIndex) => {
+    // Se trabalhar com lista filtrada, precisa mapear índices
+    if (searchQuery.trim()) {
+      // Reordenar na lista filtrada
+      const newList = moveItemInArray(list, previousIndex, currentIndex);
+      
+      // Mapear de volta para a lista completa mantendo os que não estão na lista filtrada
+      setProcesses((prev) => {
+        const listIds = new Set(list.map(p => p.id));
+        const reorderedProcesses = newList.map(p => prev.find(proc => proc.id === p.id)).filter(Boolean);
+        const otherProcesses = prev.filter(p => !listIds.has(p.id));
+        const finalList = [...reorderedProcesses, ...otherProcesses];
+        
+        // Persistir nova ordem
+        persistList(finalList);
+        return finalList;
+      });
+    } else {
+      // Lista não filtrada - reordenar diretamente
+      setProcesses((prev) => {
+        const newProcesses = moveItemInArray(prev, previousIndex, currentIndex);
+        persistList(newProcesses);
+        return newProcesses;
+      });
+    }
+    }, [list, searchQuery, moveItemInArray, persistList]);
+
+  // Event listener global para mover o preview com o cursor E reorganizar itens automaticamente
+  React.useEffect(() => {
+    if (draggedIndex === null || !dragPreviewRef.current) return;
+
+    let lastTargetIndex = draggedIndex;
+    let isReorganizing = false;
+
+    const handleDragMove = (e) => {
+      // Cancela frame anterior se ainda não foi executado
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+
+      // Usa requestAnimationFrame para movimento suave (60fps)
+      animationFrameRef.current = requestAnimationFrame(() => {
+        if (!dragPreviewRef.current) return;
+        
+        // Move o preview
+        const x = e.clientX - dragOffsetRef.current.x;
+        const y = e.clientY - dragOffsetRef.current.y;
+        
+        dragPreviewRef.current.style.left = `${x}px`;
+        dragPreviewRef.current.style.top = `${y}px`;
+        
+        // Evita reorganizar se já está em processo
+        if (isReorganizing) return;
+        
+        // Detecta sobre qual item está o cursor (ignora o preview)
+        dragPreviewRef.current.style.pointerEvents = 'none';
+        const elementBelow = document.elementFromPoint(e.clientX, e.clientY);
+        dragPreviewRef.current.style.pointerEvents = 'auto';
+        
+        if (!elementBelow) return;
+        
+        // Busca o elemento .cdk-drag mais próximo (pode ser o próprio ou pai)
+        const processRow = elementBelow.closest('.cdk-drag:not(.cdk-drag-preview)');
+        
+        if (processRow) {
+          const targetIndex = parseInt(processRow.getAttribute('data-index'), 10);
+          
+          // Só reorganiza se for diferente do último alvo
+          if (!isNaN(targetIndex) && targetIndex !== lastTargetIndex) {
+            isReorganizing = true;
+            lastTargetIndex = targetIndex;
+            
+            setDragOverIndex(targetIndex);
+            
+            // Reorganiza a lista usando callback para pegar o estado atual
+            setProcesses(prevList => {
+              const newList = [...prevList];
+              
+              // Encontra a posição atual do item arrastado
+              let currentPos = -1;
+              for (let i = 0; i < newList.length; i++) {
+                if (i === draggedIndex) {
+                  currentPos = i;
+                  break;
+                }
+              }
+              
+              if (currentPos === -1 || currentPos === targetIndex) {
+                isReorganizing = false;
+                return prevList;
+              }
+              
+              // Move o item
+              const [draggedItem] = newList.splice(currentPos, 1);
+              newList.splice(targetIndex, 0, draggedItem);
+              
+              // Pequeno delay para suavizar
+              setTimeout(() => {
+                isReorganizing = false;
+              }, 100);
+              
+              return newList;
+            });
+            
+            // Atualiza o draggedIndex para a nova posição
+            setDraggedIndex(targetIndex);
+          }
+        }
+      });
+    };
+
+    document.addEventListener('dragover', handleDragMove, { passive: false });
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      document.removeEventListener('dragover', handleDragMove);
+    };
+  }, [draggedIndex]);
+
+
+  // ===== Toast helper (PRECISA estar ANTES das funções que usam) =====
+  const showToast = React.useCallback((message, type) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 4000); // Auto-hide após 4s
+  }, []);
+
+  // Função para mudar idioma com toast
+  const handleLanguageChange = React.useCallback((newLanguage) => {
+    setLanguage(newLanguage);
+    // Usa getTranslation diretamente com o novo idioma para garantir a mensagem correta
+    const message = getTranslation(newLanguage, 'settings.languageChanged');
+    showToast(message, 'success');
+  }, [showToast]);
+
+  // ===== Electron runtime API (start/stop/show/hide) =====
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  
+  // startOne precisa ser useCallback porque é passado para useCrashDetection
+  const startOne = React.useCallback(async (id, { hidden = true } = {}) => {
+    // USA O REF para pegar o valor ATUAL de processes
+    const proc = processesRef.current.find((p) => p.id === id);
+    
+    if (!proc) {
+      console.error('[startOne] Processo não encontrado:', id);
+      return;
+    }
+
+    // Fallback (web / sem Electron)
+    if (typeof api.startProcess !== "function") {
+      setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: true, windowHidden: false } : p)));
+      return;
+    }
+
+    if (!proc.path) {
+      console.error('[startOne] Processo sem path:', id);
+      return;
+    }
+
+    // 1) Sempre inicia VISÍVEL para dar tempo de clicar no modal (OK) do executável
+    const res = await api.startProcess({ id, path: proc.path, hidden: false });
+    
+    if (!res?.ok) {
+      console.error('[startOne] Erro ao iniciar:', res?.error);
+      showToast(`${t('toast.errorStarting')} ${proc.name}: ${res?.error || t('toast.unknownError')}`, 'error');
+      return;
+    }
+
+    setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: true, windowHidden: false } : p)));
+
+    // 2) Auto Click OK em diálogos MUDevs (se ativado) - UNIVERSAL para TODOS os processos
+    if (autoOKDialogs && res.pid) {
+      try {
+        if (typeof api.autoClickOK === 'function') {
+          // Aguarda 1500ms para o modal aparecer e tenta clicar no OK
+          await sleep(1500);
+          const okRes = await api.autoClickOK({ pid: res.pid, timeoutMs: 5000, retries: 8 });
+          if (okRes?.ok) {
+            console.log(`[AutoOK] Clique automático realizado para ${proc.name}`);
+          } else {
+            // Não encontrou modal OK - isso é normal para alguns processos
+            console.log(`[AutoOK] Modal OK não encontrado para ${proc.name} (isso é normal)`);
+          }
+        }
+      } catch (err) {
+        // Silencioso - não é erro crítico se não encontrar
+        console.log(`[AutoOK] Não foi possível auto-click em ${proc.name}:`, err.message);
+      }
+    }
+
+    // 3) Se você quiser iniciar oculto, esperamos um pouco antes de dar HIDE
+    if (hidden) {
+      const delay = Number(proc.delayMs ?? DEFAULT_STARTUP_DELAY_MS);
+      if (delay > 0) await sleep(delay);
+      await api.hideProcessWindow?.(id);
+      setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, windowHidden: true } : p)));
+    }
+  }, [api, showToast, autoOKDialogs]); // Adicionar autoOKDialogs nas dependencies
+
+  const stopOne = React.useCallback(async (id) => {
+    const proc = processesRef.current.find((p) => p.id === id);
+    if (!proc) return;
+
+    // Electron real stop
+    if (typeof api.stopProcess === "function") {
+      const res = await api.stopProcess(id);
+      if (res?.ok !== false) {
+        setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: false, windowHidden: false } : p)));
+      }
+      return;
+    }
+
+    // fallback (UI only)
+    setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: false, windowHidden: false } : p)));
+  }, [api]);
+
+  const restartOne = React.useCallback(async (id, { hidden = true } = {}) => {
+    const proc = processesRef.current.find((p) => p.id === id);
+    if (!proc?.path) return;
+
+    if (typeof api.restartProcess === "function") {
+      // reinicia visível, e depois (opcional) oculta com delay
+      const res = await api.restartProcess({ id, hidden: false });
+      if (!res?.ok) return;
+
+      setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: true, windowHidden: false } : p)));
+
+      // Auto Click OK em diálogos MUDevs (se ativado) - UNIVERSAL para TODOS os processos
+      if (autoOKDialogs && res.pid) {
+        try {
+          if (typeof api.autoClickOK === 'function') {
+            // Aguarda 1500ms para o modal aparecer e tenta clicar no OK
+            await sleep(1500);
+            const okRes = await api.autoClickOK({ pid: res.pid, timeoutMs: 5000, retries: 8 });
+            if (okRes?.ok) {
+              console.log(`[AutoOK] Clique automático realizado para ${proc.name} (restart)`);
+            } else {
+              // Não encontrou modal OK - isso é normal para alguns processos
+              console.log(`[AutoOK] Modal OK não encontrado para ${proc.name} (restart) - isso é normal`);
+            }
+          }
+        } catch (err) {
+          // Silencioso - não é erro crítico se não encontrar
+          console.log(`[AutoOK] Não foi possível auto-click em ${proc.name} (restart):`, err.message);
+        }
+      }
+
+      if (hidden) {
+        const delay = Number(proc.delayMs ?? DEFAULT_STARTUP_DELAY_MS);
+        if (delay > 0) await sleep(delay);
+        await api.hideProcessWindow?.(id);
+        setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, windowHidden: true } : p)));
+      }
+      return;
+    }
+
+    await stopOne(id);
+    setTimeout(() => startOne(id, { hidden }), 350);
+  }, [api, autoOKDialogs]); // Adicionar autoOKDialogs nas dependencies
+
+
+const showWindow = React.useCallback(async (id) => {
+  if (typeof api.showProcessWindow !== "function") return;
+  await api.showProcessWindow(id);
+  setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, windowHidden: false } : p)));
+}, [api]);
+
+const hideWindow = React.useCallback(async (id) => {
+  if (typeof api.hideProcessWindow !== "function") return;
+  await api.hideProcessWindow(id);
+  setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, windowHidden: true } : p)));
+}, [api]);
+
+  const showAllWindows = React.useCallback(async () => {
+    if (typeof api.showAllProcessWindows === "function") {
+      await api.showAllProcessWindows();
+      setProcesses((prev) => prev.map((p) => (p.running ? { ...p, windowHidden: false } : p)));
+      return;
+    }
+    // fallback: tenta individual
+    const currentProcesses = processesRef.current;
+    
+    for (const p of currentProcesses) {
+      if (p.running) await showWindow(p.id);
+    }
+  }, [api]); // NÃO incluir showWindow para evitar dependências circulares
+
+const hideAllWindows = React.useCallback(async () => {
+  // não existe handler "hide all" no backend, então fazemos via loop
+  const currentProcesses = processesRef.current;
+  
+  for (const p of currentProcesses) {
+    if (p.running) await hideWindow(p.id);
+  }
+}, []); // NÃO incluir hideWindow para evitar dependências circulares
+
+
+  // ===== Context Menu (botão direito no processo) =====
+  const [ctxMenu, setCtxMenu] = React.useState(null); // { x, y, id }
+  const [sqlConfigModal, setSqlConfigModal] = React.useState(false); // modal de configurações SQL
+  const [backupPath, setBackupPath] = React.useState(null); // pasta de backup SQL
+  const [nextBackupDate, setNextBackupDate] = React.useState(null); // próxima data de backup
+  const [backupRecurrence, setBackupRecurrence] = React.useState('none'); // 'none', 'once', 'daily', 'weekly', 'monthly'
+  
+  // SQL States
+  const [sqlServer, setSqlServer] = React.useState('');
+  const [sqlUser, setSqlUser] = React.useState('');
+  const [sqlPassword, setSqlPassword] = React.useState('');
+  const [sqlConnected, setSqlConnected] = React.useState(false);
+  const [sqlDatabase, setSqlDatabase] = React.useState('MuOnline'); // database padrão
+  const [availableDatabases, setAvailableDatabases] = React.useState([]); // lista de databases disponíveis
+  const [isLoadingDatabases, setIsLoadingDatabases] = React.useState(false); // flag para evitar buscar múltiplas vezes
+  const [sqlType, setSqlType] = React.useState('sqlserver'); // 'sqlserver' ou 'mysql'
+  const [sqlPort, setSqlPort] = React.useState(''); // porta (MySQL usa 3306)
+  const [toast, setToast] = React.useState(null); // { type: 'success' | 'error', message: string }
+  const [isConnectingDb, setIsConnectingDb] = React.useState(false); // loading de conexão
+  const [connectionAttempt, setConnectionAttempt] = React.useState({ current: 0, total: 0 }); // rastreio de tentativas de conexão
+  const [autoConnectFailedModal, setAutoConnectFailedModal] = React.useState(false); // modal de falha no auto-connect
+
+  // Métricas States
+  const [metrics, setMetrics] = React.useState({
+    totalCpu: 0,
+    totalMemory: 0,
+    processes: []
+  });
+
+  // Helper: adiciona log de erro
+  // TIPOS DE ERRO REGISTRADOS:
+  // - 'sql-server': Erros de conexão/backup do SQL Server
+  // - 'mysql': Erros de conexão/backup do MySQL
+  // - 'process': Erros de processos (crash, falha ao iniciar/parar/reiniciar)
+  const addErrorLog = React.useCallback((type, message) => {
+    const log = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // ID único garantido
+      timestamp: new Date().toLocaleString('pt-BR'),
+      type, // 'sql-server' | 'mysql' | 'process'
+      message
+    };
+    
+    setConsoleLogs(prev => {
+      const newLogs = [log, ...prev];
+      return newLogs.slice(0, MAX_LOGS);
+    });
+
+    // Salva log em arquivo
+    if (typeof window.mu?.writeLog === 'function') {
+      window.mu.writeLog(type, message).catch(() => {
+        // Silently fail - não queremos quebrar o app por erro de log
+      });
+    }
+  }, [MAX_LOGS]);
+
+  const clearLogs = () => setConsoleLogs([]);
+
+  const openCtxMenu = (e, id) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, id });
+  };
+
+  // Funções auxiliares para formatar métricas
+  const formatMemory = (bytes) => {
+    if (!bytes || bytes === 0) return '0 MB';
+    const mb = bytes / (1024 * 1024);
+    if (mb < 1024) {
+      return `${mb.toFixed(1)} MB`;
+    }
+    const gb = mb / 1024;
+    return `${gb.toFixed(2)} GB`;
+  };
+
+  const formatCpu = (percentage) => {
+    if (!percentage || percentage === 0) return '0%';
+    return `${percentage.toFixed(1)}%`;
+  };
+
+  // SQL Functions
+  const handleSqlConnect = async () => {
+    if (!sqlServer || !sqlUser || !sqlPassword) {
+      showToast(t('sql.fillAllFields'), 'warning');
+      return;
+    }
+
+    // Validação da porta
+    if (!sqlPort || sqlPort.trim() === '') {
+      showToast(t('sql.fillPort'), 'warning');
+      return;
+    }
+
+    // Validação se a porta é um número válido
+    const portNumber = parseInt(sqlPort);
+    if (isNaN(portNumber) || portNumber < 1 || portNumber > 65535) {
+      showToast(t('sql.invalidPort'), 'warning');
+      return;
+    }
+
+    // MOSTRA TOAST DE CONECTANDO
+    setIsConnectingDb(true);
+    setConnectionAttempt({ current: 1, total: 1 });
+
+    try {
+      const result = await window.mu.sqlConnect({
+        type: sqlType,
+        server: sqlServer,
+        user: sqlUser,
+        password: sqlPassword,
+        port: sqlPort
+      });
+
+      setIsConnectingDb(false);
+      setConnectionAttempt({ current: 0, total: 0 });
+
+      if (result.ok) {
+        setSqlConnected(true);
+        showToast(t('sql.connectSuccess'), 'success');
+        
+        // AUTO-SAVE: Salva credenciais automaticamente após conexão bem-sucedida
+        try {
+          await window.mu.sqlSaveConfig({
+            type: sqlType,
+            server: sqlServer,
+            user: sqlUser,
+            password: sqlPassword,
+            database: sqlDatabase,
+            port: sqlPort,
+            backupPath: backupPath,
+            nextBackupDate: nextBackupDate,
+            backupRecurrence: backupRecurrence,
+            manualDisconnect: false // Remove flag - conexão manual bem-sucedida
+          });
+        } catch (err) {
+          // Silenciosamente falha se não conseguir salvar
+        }
+        
+        // Buscar lista de databases disponíveis (apenas uma vez e se window.mu existir)
+        if (window.mu?.sqlListDatabases && !isLoadingDatabases) {
+          setIsLoadingDatabases(true);
+          try {
+            const dbResult = await window.mu.sqlListDatabases({ type: sqlType });
+            if (dbResult && dbResult.ok && Array.isArray(dbResult.databases)) {
+              setAvailableDatabases(dbResult.databases);
+            } else {
+              setAvailableDatabases([]); // Garante que seja array vazio se falhar
+            }
+          } catch (err) {
+            setAvailableDatabases([]); // Garante que seja array vazio se der erro
+          } finally {
+            setIsLoadingDatabases(false);
+          }
+        }
+      } else {
+        setSqlConnected(false);
+        addErrorLog(sqlType === 'mysql' ? 'mysql' : 'sql-server', `${t('sql.connectError')}: ${result.error}`);
+        showToast(result.error, 'error');
+      }
+    } catch (err) {
+      setIsConnectingDb(false);
+      setConnectionAttempt({ current: 0, total: 0 });
+      addErrorLog(sqlType === 'mysql' ? 'mysql' : 'sql-server', `${t('sql.connectError')}: ${err.message}`);
+      showToast(`${t('sql.connectError')}: ${err.message}`, 'error');
+    }
+  };
+
+  const handleSqlDisconnect = async () => {
+    setSqlConnected(false);
+    setAvailableDatabases([]); // Limpa a lista ao desconectar
+    setIsLoadingDatabases(false); // Reset flag
+    
+    // Salva flag de desconexão manual para NÃO reconectar automaticamente
+    await window.mu.sqlSaveConfig({
+      type: sqlType,
+      server: sqlServer,
+      user: sqlUser,
+      password: sqlPassword,
+      database: sqlDatabase,
+      port: sqlPort,
+      backupPath: backupPath,
+      nextBackupDate: nextBackupDate,
+      backupRecurrence: backupRecurrence,
+      manualDisconnect: true // Flag para prevenir auto-connect
+    });
+    
+    showToast(t('sql.disconnectSuccess'), 'disconnect');
+  };
+
+  const handleSaveSqlConfig = async () => {
+    const config = {
+      type: sqlType,
+      server: sqlServer,
+      user: sqlUser,
+      password: sqlPassword,
+      database: sqlDatabase,
+      port: sqlPort,
+      backupPath: backupPath,
+      nextBackupDate: nextBackupDate,
+      backupRecurrence: backupRecurrence
+      // NÃO salva availableDatabases - será buscado automaticamente ao conectar
+    };
+
+    const saved = await window.mu.sqlSaveConfig(config);
+    if (saved) {
+      if (!sqlConnected) {
+        showToast(t('sql.configSavedConnect'), 'warning');
+      } else {
+        showToast(t('sql.configSaved'), 'success');
+      }
+      setSqlConfigModal(false);
+    } else {
+      showToast(t('sql.configSaveError'), 'error');
+    }
+  };
+
+  const handleSqlBackup = async () => {
+    if (!sqlConnected) {
+      showToast(t('sql.configFirst'), 'warning');
+      return;
+    }
+
+    if (!backupPath) {
+      showToast(t('backup.noFolderSelected'), 'warning');
+      return;
+    }
+
+    // Se escolheu "Todos", faz backup de cada database
+    if (sqlDatabase === 'Todos' && Array.isArray(availableDatabases) && availableDatabases.length > 0) {
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const db of availableDatabases) {
+        try {
+          const result = await window.mu.sqlBackup({
+            backupPath: backupPath,
+            database: db,
+            type: sqlType
+          });
+
+          if (result.ok) {
+            successCount++;
+          } else {
+            failCount++;
+            addErrorLog(sqlType === 'mysql' ? 'mysql' : 'sql-server', t('error.backupError', { db }) + `: ${result.error}`);
+          }
+        } catch (err) {
+          failCount++;
+          addErrorLog(sqlType === 'mysql' ? 'mysql' : 'sql-server', t('error.backupException', { db }) + `: ${err.message}`);
+        }
+      }
+
+      if (failCount === 0) {
+        const msg = successCount > 1 
+          ? t('toast.backupSuccess_multiple', { count: successCount })
+          : t('toast.backupSuccess_count', { count: successCount });
+        showToast(msg, 'success');
+      } else if (successCount > 0) {
+        showToast(t('toast.backupPartial', { success: successCount, fail: failCount }), 'warning');
+      } else {
+        showToast(t('toast.backupFailed'), 'error');
+      }
+    } else {
+      // Backup de um database específico
+      const result = await window.mu.sqlBackup({
+        backupPath: backupPath,
+        database: sqlDatabase,
+        type: sqlType
+      });
+
+      if (result.ok) {
+        showToast(t('toast.backupSingleSuccess'), 'success');
+      } else {
+        addErrorLog(sqlType === 'mysql' ? 'mysql' : 'sql-server', t('error.backupSingleError') + `: ${result.error}`);
+        showToast(result.error, 'error');
+      }
+    }
+  };
+
+  // Carregar configurações SQL ao iniciar
+  const hasAttemptedAutoConnect = React.useRef(false);
+  
+  React.useEffect(() => {
+    const loadSqlConfig = async () => {
+      // Previne múltiplas execuções (React Strict Mode chama useEffect 2x em dev)
+      if (hasAttemptedAutoConnect.current) {
+        return;
+      }
+      
+      const config = await window.mu.sqlLoadConfig();
+      
+      if (config) {
+        setSqlType(config.type || 'sqlserver');
+        setSqlServer(config.server || '');
+        setSqlUser(config.user || '');
+        setSqlPassword(config.password || '');
+        setSqlDatabase(config.database || 'MuOnline');
+        setSqlPort(config.port || '');
+        setBackupPath(config.backupPath || null);
+        setNextBackupDate(config.nextBackupDate || null);
+        setBackupRecurrence(config.backupRecurrence || 'none');
+
+        // Auto-connect se tiver credenciais salvas E não foi desconectado manualmente
+        if (config.server && config.user && config.password && config.port && !config.manualDisconnect) {
+          // Marca IMEDIATAMENTE como tentado para prevenir duplicação
+          if (hasAttemptedAutoConnect.current) {
+            return;
+          }
+          hasAttemptedAutoConnect.current = true;
+          
+          // AGUARDA: Splash screen fechar (4s) + 500ms para garantir que a janela está visível
+          setTimeout(async () => {
+            // Função auxiliar para tentar conectar
+            const attemptConnection = async (attemptNum) => {
+              try {
+                // Atualiza o contador de tentativas
+                setConnectionAttempt({ current: attemptNum, total: 2 });
+                
+                const [result] = await Promise.all([
+                  window.mu.sqlConnect({
+                    type: config.type || 'sqlserver',
+                    server: config.server,
+                    user: config.user,
+                    password: config.password,
+                    port: config.port
+                  }),
+                  new Promise(resolve => setTimeout(resolve, 2000)) // Timeout mínimo de 2s
+                ]);
+                return result;
+              } catch (err) {
+                return { ok: false, error: err.message };
+              }
+            };
+
+            setIsConnectingDb(true);
+            setConnectionAttempt({ current: 1, total: 2 });
+
+            // TENTATIVA 1
+            let result = await attemptConnection(1);
+
+            if (!result || !result.ok) {
+              // TENTATIVA 2 após 3 segundos
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              setConnectionAttempt({ current: 2, total: 2 });
+              result = await attemptConnection(2);
+            }
+
+            setIsConnectingDb(false);
+            setConnectionAttempt({ current: 0, total: 0 });
+
+            if (result && result.ok) {
+              // SUCESSO
+              setSqlConnected(true);
+              showToast(t('sql.connectSuccess'), 'success');
+              
+              // Buscar lista de databases disponíveis
+              if (window.mu?.sqlListDatabases) {
+                try {
+                  const dbResult = await window.mu.sqlListDatabases({ type: config.type || 'sqlserver' });
+                  if (dbResult && dbResult.ok && Array.isArray(dbResult.databases)) {
+                    setAvailableDatabases(dbResult.databases);
+                  } else {
+                    setAvailableDatabases([]);
+                  }
+                } catch (err) {
+                  setAvailableDatabases([]);
+                }
+              }
+            } else {
+              // FALHOU após 2 tentativas - Mostra modal
+              setSqlConnected(false);
+              setAutoConnectFailedModal(true);
+              // ADICIONA LOG DE ERRO
+              const errorMsg = result?.error || 'Falha na conexão automática';
+              addErrorLog(config.type === 'mysql' ? 'mysql' : 'sql-server', `${t('error.autoConnectFailed_log')}: ${errorMsg}`);
+            }
+          }, 4500); // Aguarda 4.5 segundos (splash de 4s + 500ms de margem)
+        } else if (config.server) {
+          // Só mostra "desconectado" se tem config mas NÃO tem credenciais completas (não tentou conectar)
+          setTimeout(() => {
+            showToast(t('sql.dbOfflineMsg'), 'info');
+          }, 3000);
+        }
+      }
+    };
+    loadSqlConfig();
+  }, []);
+
+  // Verificação periódica de backup automático
+  React.useEffect(() => {
+    if (!nextBackupDate || !sqlConnected || !backupPath || backupRecurrence === 'none') return;
+
+    const checkBackup = setInterval(() => {
+      const now = new Date();
+      const backupTime = new Date(nextBackupDate);
+      
+      if (now >= backupTime) {
+        // Executar backup automático
+        handleSqlBackup();
+        
+        // Calcular próxima data baseado na recorrência
+        const nextDate = new Date(backupTime);
+        switch (backupRecurrence) {
+          case 'daily':
+            nextDate.setDate(nextDate.getDate() + 1);
+            setNextBackupDate(nextDate.toISOString());
+            break;
+          case 'weekly':
+            nextDate.setDate(nextDate.getDate() + 7);
+            setNextBackupDate(nextDate.toISOString());
+            break;
+          case 'monthly':
+            nextDate.setMonth(nextDate.getMonth() + 1);
+            setNextBackupDate(nextDate.toISOString());
+            break;
+          case 'once':
+          case 'none':
+          default:
+            // Backup único ou desativado, limpa a data
+            setNextBackupDate(null);
+            break;
+        }
+        
+        // Salvar nova configuração
+        window.mu.sqlSaveConfig({
+          type: sqlType,
+          server: sqlServer,
+          user: sqlUser,
+          password: sqlPassword,
+          database: sqlDatabase,
+          port: sqlPort,
+          backupPath: backupPath,
+          nextBackupDate: (backupRecurrence === 'once' || backupRecurrence === 'none') ? null : nextDate.toISOString(),
+          backupRecurrence: backupRecurrence
+        });
+      }
+    }, 60000); // Verifica a cada 1 minuto
+
+    return () => clearInterval(checkBackup);
+  }, [nextBackupDate, sqlConnected, backupPath, backupRecurrence, sqlType, sqlServer, sqlUser, sqlPassword, sqlDatabase, sqlPort]);
+
+  React.useEffect(() => {
+    if (!ctxMenu) return;
+
+    const close = () => setCtxMenu(null);
+    const onKey = (e) => {
+      if (e.key === "Escape") setCtxMenu(null);
+    };
+
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [ctxMenu]);
+
+
+  const checkedCount = React.useMemo(
+    () => processes.reduce((n, p) => n + (p.checked ? 1 : 0), 0),
+    [processes]
+  );
+
+  const showUndo = (prevSnapshot, message) => {
+    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+
+    setUndo({ prev: prevSnapshot, message });
+
+    undoTimerRef.current = window.setTimeout(() => {
+      setUndo(null);
+      undoTimerRef.current = null;
+    }, 5000);
+  };
+
+  const undoLast = () => {
+    if (!undo?.prev) return;
+    setProcesses(() => {
+  persistList(undo.prev);
+  return undo.prev;
+});
+    setUndo(null);
+    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = null;
+  };
+
+  const toggleChecked = (id) => {
+    setProcesses((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, checked: !p.checked } : p))
+    );
+  };
+
+  const toggleRunning = async (id) => {
+    const proc = processes.find((p) => p.id === id);
+    if (!proc) return;
+
+    if (proc.running) await stopOne(id);
+    else await startOne(id, { hidden: true });
+  };
+
+  // SIDEBAR ACTIONS - SIMPLIFICADO: usa processesRef para pegar processos atuais
+  const startAll = React.useCallback(async () => {
+    if (isStartingAll) return;
+    
+    setIsStartingAll(true);
+    try {
+      const currentProcesses = processesRef.current;
+      
+      // Se não há processos na lista
+      if (currentProcesses.length === 0) {
+        showToast(t('toast.noProcessToStart'), 'warning');
+        return;
+      }
+      
+      const toStart = currentProcesses.filter(p => !p.running);
+      
+      if (toStart.length === 0) {
+        showToast(t('toast.allProcessesRunning'), 'warning');
+        return;
+      }
+      
+      for (const p of toStart) {
+        try {
+          await startOne(p.id, { hidden: true });
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (err) {
+          console.error('[startAll] Erro ao iniciar', p.name, ':', err);
+        }
+      }
+      
+      const msg = toStart.length > 1 
+        ? `${toStart.length} ${t('toast.processesStarted_count')}.`
+        : `${toStart.length} ${t('toast.processStarted_count')}.`;
+      showToast(msg, 'success');
+    } catch (error) {
+      console.error('[startAll] Erro:', error);
+      showToast(`Erro: ${error.message}`, 'error');
+    } finally {
+      setIsStartingAll(false);
+    }
+  }, [isStartingAll, showToast, startOne]);
+
+  const stopAll = React.useCallback(async () => {
+    const currentProcesses = processesRef.current;
+    const runningCount = currentProcesses.filter(p => p.running).length;
+    
+    if (runningCount === 0) {
+      showToast(t('toast.noProcessRunning'), 'warning');
+      return;
+    }
+
+    const confirmed = await confirmDialog({
+      title: 'Parar Todos os Processos?',
+      message: `Você está prestes a parar ${runningCount} processo${runningCount > 1 ? 's' : ''} em execução. Esta ação não pode ser desfeita.`,
+      confirmText: 'Sim, Parar Todos',
+      cancelText: 'Cancelar',
+      tone: 'danger'
+    });
+
+    if (!confirmed) return;
+
+    const toStop = currentProcesses.filter(p => p.running);
+    for (const p of toStop) {
+      try {
+        await stopOne(p.id);
+      } catch (err) {
+        addErrorLog('process', t('error.stopError', { name: p.name }) + `: ${err.message}`);
+      }
+    }
+    const msg = toStop.length > 1 
+      ? `${toStop.length} ${t('toast.processesStopped_count')}.`
+      : `${toStop.length} ${t('toast.processStopped_count')}.`;
+    showToast(msg, 'success');
+  }, [confirmDialog, showToast, addErrorLog, stopOne]);
+
+  const restartAll = React.useCallback(async () => {
+    if (isRestartingAll) return;
+    
+    const currentProcesses = processesRef.current;
+    const processCount = currentProcesses.length;
+    
+    if (processCount === 0) {
+      showToast(t('toast.noProcessInList'), 'warning');
+      return;
+    }
+
+    const confirmed = await confirmDialog({
+      title: 'Reiniciar Todos os Processos?',
+      message: `Você está prestes a reiniciar ${processCount} processo${processCount > 1 ? 's' : ''}. Todos os processos serão parados e reiniciados.`,
+      confirmText: 'Sim, Reiniciar Todos',
+      cancelText: 'Cancelar',
+      tone: 'danger'
+    });
+
+    if (!confirmed) return;
+    
+    setIsRestartingAll(true);
+
+    // PASSO 1: Parar TODOS os processos que estão rodando
+    const runningProcesses = currentProcesses.filter(p => p.running);
+    for (const p of runningProcesses) {
+      try {
+        await stopOne(p.id);
+      } catch (err) {
+        addErrorLog('process', t('error.stopError', { name: p.name }) + `: ${err.message}`);
+      }
+    }
+
+    // PASSO 2: Delay de 1.5 segundos
+    await sleep(1500);
+
+    // PASSO 3: Iniciar TODOS os processos
+    let successCount = 0;
+    for (const p of currentProcesses) {
+      try {
+        await startOne(p.id, { hidden: true });
+        successCount++;
+      } catch (err) {
+        addErrorLog('process', t('error.restartError', { name: p.name }) + `: ${err.message}`);
+      }
+    }
+    
+    const msg = successCount > 1 
+      ? `${successCount} ${t('toast.processesRestarted_count')}.`
+      : `${successCount} ${t('toast.processRestarted_count')}.`;
+    showToast(msg, 'success');
+    setIsRestartingAll(false);
+  }, [isRestartingAll, confirmDialog, showToast, addErrorLog, stopOne, startOne]);
+
+  // ============================================
+  // CRASH DETECTION & AUTO-RESTART SYSTEM (usando hook)
+  // ============================================
+  const {
+    crashState,
+    crashQueueLength,
+    handleProcessCrash,
+    cancelCrashRestart,
+    skipCrashAndContinue,
+    manualRestartAfterCrash,
+  } = useCrashDetection(processes, startOne, showToast);
+
+  // Listener para detectar crash de processos (DEPOIS do hook para ter handleProcessCrash definido)
+  React.useEffect(() => {
+    if (typeof api.onProcessExited !== "function") return;
+    
+    return api.onProcessExited(({ id, wasManualStop, crashed, exitCode, detectedByWatchdog }) => {
+      console.log('[App] Recebeu process-exited:', { id, wasManualStop, crashed, exitCode, detectedByWatchdog });
+      
+      // Atualiza o estado do processo
+      setProcesses((prev) => {
+        const updatedProcesses = prev.map((p) => (p.id === id ? { ...p, running: false, windowHidden: false } : p));
+        
+        // Se crashou (exitCode !== 0), inicia sistema de auto-restart
+        // Fazemos isso aqui dentro para ter acesso aos dados atualizados
+        if (crashed && !wasManualStop) {
+          const processName = updatedProcesses.find(p => p.id === id)?.name || id;
+          const detectionMethod = detectedByWatchdog ? 'watchdog' : 'exit event';
+          addErrorLog('process', t('error.processCrashed', { name: processName, code: exitCode, method: detectionMethod }));
+          
+          console.log('[App] Chamando handleProcessCrash para:', id);
+          // Chama handleProcessCrash após o setState para garantir que o estado está atualizado
+          setTimeout(() => handleProcessCrash(id), 0);
+        }
+        
+        return updatedProcesses;
+      });
+    });
+  }, [api, handleProcessCrash, addErrorLog]);
+
+  const addProcess = async () => {
+  // Electron: abre seletor de .exe
+  if (typeof api.pickExecutables === "function") {
+    const paths = await api.pickExecutables(); // string[]
+    if (!Array.isArray(paths) || paths.length === 0) return;
+
+    setProcesses((prev) => {
+      const existing = new Set(prev.map((p) => p.path).filter(Boolean));
+
+      const toAdd = paths
+        .filter((fullPath) => !existing.has(fullPath))
+        .map((fullPath) => {
+          const name = fullPath.split(/[/\\]/).pop() || fullPath;
+          return {
+            id: `p-${Date.now()}-${Math.random().toString(16).slice(2)}-${name}`,
+            name,
+            path: fullPath,
+            running: false,
+            checked: false,
+            selected: false,
+          };
+        });
+
+      const next = [...prev, ...toAdd];
+      persistList(next);
+      return next;
+    });
+
+    return;
+  }
+
+  // fallback (caso rode sem Electron)
+  const name = window.prompt("Nome do processo (ex: GameServer.exe):", "")?.trim();
+  if (!name) return;
+
+  const id = `p-${Date.now()}-${Math.random().toString(16).slice(2)}-${name}`;
+  setProcesses((prev) => {
+    const next = [...prev, { id, name, running: false, checked: false, selected: false }];
+    persistList(next);
+    return next;
+  });
+};
+
+  const removeChecked = async () => {
+    const snapshot = processes;
+    const n = snapshot.filter((p) => p.checked).length;
+    if (n <= 0) return;
+
+    const ok = await confirmDialog({
+      title: "Remover processos",
+      message: `Remover ${n} processo(s) marcado(s)?`,
+      confirmText: "Remover",
+      cancelText: "Cancelar",
+      tone: "danger",
+    });
+    if (!ok) return;
+
+    showUndo(snapshot, `Removidos ${n} processo(s).`);
+setProcesses(() => {
+  const next = snapshot.filter((p) => !p.checked);
+  persistList(next);
+  return next;
+});
+
+  };
+
+  const clearAll = async () => {
+    const snapshot = processes;
+    if (snapshot.length === 0) return;
+
+    const ok = await confirmDialog({
+      title: "Limpar lista",
+      message: "Limpar todos os processos da lista?",
+      confirmText: "Limpar",
+      cancelText: "Cancelar",
+      tone: "danger",
+    });
+    if (!ok) return;
+
+    showUndo(snapshot, `Lista limpa (${snapshot.length} itens).`);
+setProcesses(() => {
+  persistList([]);
+  return [];
+});
+  };
+
+  // 2 colunas fixas (15/15)
+  const MAX_PER_COL = 15;
+  const col1 = list.slice(0, MAX_PER_COL);
+  const col2 = list.slice(MAX_PER_COL, MAX_PER_COL * 2);
+
+  const runningProcs = processes.filter((p) => p.running);
+  const allWindowsVisible = runningProcs.length > 0 && runningProcs.every((p) => !p.windowHidden);
+
+  // Sistema de status inteligente baseado em processos essenciais
+  const essentialProcesses = ['ConnectServer.exe', 'DataServer.exe', 'GameServer.exe', 'JoinServer.exe'];
+  
+  const getServerStatus = React.useMemo(() => {
+    const runningEssentials = processes.filter(p => 
+      p.running && essentialProcesses.some(essential => 
+        p.name.toLowerCase() === essential.toLowerCase()
+      )
+    );
+    
+    const essentialCount = runningEssentials.length;
+    
+    // Status sempre em inglês (não traduz)
+    if (essentialCount === 4) {
+      return { color: 'bg-[#30FF15]', text: 'Online', textColor: 'text-[#30FF15]' };
+    } else if (essentialCount > 0) {
+      return { color: 'bg-[#FFD700]', text: 'Warning', textColor: 'text-[#FFD700]' };
+    } else {
+      return { color: 'bg-[#FF0000]', text: 'Offline', textColor: 'text-[#FF0000]' };
+    }
+  }, [processes]);
+
+  return (
+    <LanguageContext.Provider value={language}>
+      <div className="sm-app-shell relative h-screen w-screen overflow-hidden bg-[#050505] border border-white/5 rounded-[14px]">
+        {/* Barra de título customizada premium */}
+      <div className="custom-titlebar fixed top-0 left-0 right-0 h-[32px] bg-gradient-to-r from-[#0a0f1a] via-[#0d1420] to-[#0a0f1a] border-b border-[#00AEFF]/20 flex items-center justify-between px-4 z-[9999] rounded-t-[14px]" style={{ WebkitAppRegion: 'drag' }}>
+        {/* Área vazia para arrastar */}
+        <div className="flex-1"></div>
+        
+        {/* Botões de controle */}
+        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
+          {/* Minimizar */}
+          <button
+            onClick={() => window.electronAPI?.minimizeWindow?.()}
+            className="w-11 h-[32px] flex items-center justify-center hover:bg-white/10 transition-colors group"
+          >
+            <svg className="w-3 h-3 text-white/60 group-hover:text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor">
+              <path strokeLinecap="round" strokeWidth={1.5} d="M0 6h12"/>
+            </svg>
+          </button>
+          {/* Maximizar/Restaurar */}
+          <button
+            onClick={() => window.electronAPI?.toggleMaximizeWindow?.()}
+            className="w-11 h-[32px] flex items-center justify-center hover:bg-white/10 transition-colors group"
+          >
+            <svg className="w-3 h-3 text-white/60 group-hover:text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor">
+              <rect x="0.75" y="0.75" width="10.5" height="10.5" strokeWidth={1.5}/>
+            </svg>
+          </button>
+          {/* Fechar */}
+          <button
+            onClick={() => window.electronAPI?.closeWindow?.()}
+            className="w-11 h-[32px] flex items-center justify-center hover:bg-red-600 transition-colors group"
+          >
+            <svg className="w-3 h-3 text-white/60 group-hover:text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor">
+              <path strokeLinecap="round" strokeWidth={1.5} d="M1 1l10 10M11 1L1 11"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* vinheta / glow leve + radiais azul distribuídos para testar glass morphism */}
+      <div className="sm-app-bg absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_20%_30%,rgba(0,86,185,0.25)_0%,rgba(0,174,255,0.15)_40%,transparent_70%),radial-gradient(ellipse_70%_50%_at_80%_20%,rgba(0,86,185,0.3)_0%,rgba(0,174,255,0.15)_45%,transparent_75%),radial-gradient(ellipse_60%_70%_at_50%_80%,rgba(0,86,185,0.2)_0%,rgba(0,174,255,0.1)_50%,transparent_80%),radial-gradient(ellipse_90%_40%_at_center_50%,rgba(0,86,185,0.15)_0%,transparent_60%)]" style={{ paddingTop: '32px' }} />
+
+      <div className="relative mx-auto h-full w-full max-w-none" style={{ paddingTop: '32px' }}>
+        <div className="flex" style={{ height: 'calc(100vh - 32px)' }}>
+          {/* SIDEBAR */}
+          <aside className="relative z-0 w-[259px] sm-sidebar pt-[36px] pl-[24px] pr-[60px]">
+            <div className="mt-0 flex flex-col items-center">
+              <button
+                type="button"
+                onClick={pickLogo}
+                title="Clique para escolher/trocar o logo"
+                className="h-[153px] w-[153px] rounded-[22px] overflow-hidden relative group transition"
+              >
+                {logoDataUrl ? (
+                  <img
+                    src={logoDataUrl}
+                    alt="Logo do servidor"
+                    className="h-full w-full object-cover object-center"
+                    draggable={false}
+                  />
+                ) : (
+                  <div className="h-full w-full bg-black/20 border border-white/10 flex flex-col items-center justify-center gap-2">
+                    <svg className="w-12 h-12 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-[11px] text-white/25 font-medium">Adicionar Logo</span>
+                  </div>
+                )}
+
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                  <div className="text-[12px] text-white/85">{logoDataUrl ? 'Alterar logo' : 'Adicionar logo'}</div>
+                </div>
+              </button>
+
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={onLogoFileChange}
+              />
+
+              {!editingServerName ? (
+                
+<div className="mt-[16px] w-full px-[6px]">
+  <div className="relative mx-auto w-full">
+    <div
+      className="pr-[20px] text-[16px] font-semibold text-white truncate text-center"
+      title={serverName}
+    >
+      {serverName}
+    </div>
+
+    <button
+                    type="button"
+                    onClick={() => {
+                      setServerNameDraft(serverName);
+                      setEditingServerName(true);
+                      // foco pelo autoFocus do input
+                    }}
+                    title="Editar nome do servidor"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 p-1 flex items-center justify-center text-white/70 hover:text-white transition"
+                  >
+                    {/* ícone "caneta" inline */}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M12 20h9"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+  </div>
+</div>) : (
+                <div className="mt-[16px] w-full flex items-center justify-center px-[6px]">
+                  <input
+                    autoFocus
+                    value={serverNameDraft}
+                    maxLength={SERVER_NAME_MAX_CHARS}
+                    onChange={(e) => setServerNameDraft(e.target.value)}
+                    onBlur={(e) => commitServerName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitServerName(serverNameDraft);
+                      if (e.key === "Escape") cancelServerNameEdit();
+                    }}
+                    className="w-full text-center text-[16px] font-semibold text-white bg-black/40 border border-white/10 focus:border-[#0056B9]/60 outline-none rounded-[10px] px-3 py-2"
+                  />
+                </div>
+              )}
+
+              <div className="mt-[4px] flex items-center gap-2 text-[12px] text-white/80">
+                <span>{t('sidebar.statusServer')}</span>
+                <span className={`h-2 w-2 rounded-full ${getServerStatus.color}`} />
+                <span className={`${getServerStatus.textColor}/80`}>{getServerStatus.text}</span>
+              </div>
+
+              <div className="mt-[4px] h-px w-full bg-white/10" />
+            </div>
+
+            <div className="mt-[24px] space-y-[16px]">
+              <SidebarButton tone="primary" icon="plus" onClick={addProcess}>
+                {t('sidebar.addProcess')}
+              </SidebarButton>
+
+              <SidebarButton 
+                tone="primary" 
+                icon="play" 
+                onClick={startAll}
+                disabled={isStartingAll}
+              >
+                {isStartingAll ? t('common.loading') : t('sidebar.startAll')}
+              </SidebarButton>
+
+              <SidebarButton tone="primary" icon="stop" onClick={stopAll}>
+                {t('sidebar.stopAll')}
+              </SidebarButton>
+
+              <SidebarButton tone="primary" icon="restart" onClick={restartAll}>
+                {t('sidebar.restartAll')}
+              </SidebarButton>
+
+              <SidebarButton
+                tone="ghost"
+                icon="trash"
+                onClick={removeChecked}
+                disabled={checkedCount === 0}
+              >
+                {t('sidebar.removeChecked')}
+              </SidebarButton>
+
+              <SidebarButton tone="ghost" icon="broom" onClick={clearAll}>
+                {t('sidebar.clearAll')}
+              </SidebarButton>
+            </div>
+          </aside>
+
+          {/* MAIN */}
+          <main className="relative sm-main-panel z-10 -ml-[32px] flex-1 min-w-0 rounded-l-[0px] bg-[#050505]/95 px-6 xl:px-9 py-[36px]">
+            {/* VIEW: PROCESS LIST */}
+            <div className="grid h-full grid-cols-[minmax(0,1fr)_320px] grid-rows-[auto_1fr] gap-x-4 gap-y-6">
+              <div className="col-start-1 row-start-1 flex items-center gap-3">
+                <h1 className="text-[22px] font-semibold text-white">
+                  {t('header.processes')}
+                </h1>
+
+                <div className="relative group">
+                  <button
+                    type="button"
+                    onClick={allWindowsVisible ? hideAllWindows : showAllWindows}
+                    className={[
+                      "h-[32px] w-[32px] rounded-full border border-white/15 flex items-center justify-center transition",
+                      allWindowsVisible
+                        ? "bg-[#0056B9]/15 border-[#0056B9]/60 text-[#0056B9]"
+                        : "bg-black/20 hover:border-white/25 text-white/70 hover:text-white",
+                    ].join(" ")}
+                  >
+                  {/* ícone "lâmpada" inline */}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M12 2a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2Z"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M9 21h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
+                
+                {/* Tooltip Customizado - Glass Morphism */}
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+                  <div className="px-3 py-1.5 rounded-lg bg-black/80 backdrop-blur-md border border-white/10 shadow-lg whitespace-nowrap">
+                    <span className="text-[11px] text-white/90 font-medium">
+                      {allWindowsVisible ? t('sidebar.hideAll') : t('sidebar.showAll')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              </div>
+
+              <div className="col-start-2 row-start-1 flex items-start justify-end">
+                <img
+                  src={logoSmf}
+                  alt="Server Manager"
+                  className="h-[44px] w-auto select-none"
+                  draggable={false}
+                />
+              </div>
+
+              {/* LISTA */}
+              {processesLoaded && (
+              <section data-glow className="col-start-1 row-start-2 min-h-0 rounded-[28px] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.55)] sm-glass-card overflow-y-auto overflow-x-hidden">
+                {processes.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-4 text-center px-8">
+                    <svg className="w-24 h-24 text-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                    </svg>
+                    <div className="space-y-2">
+                      <p className="text-lg font-medium text-white/40">Nenhum Processo Adicionado</p>
+                      <p className="text-sm text-white/25 max-w-md">
+                        Clique no botão <span className="text-white/40 font-medium">Adicionar</span> acima para configurar seu primeiro executável.
+                      </p>
+                    </div>
+                  </div>
+                ) : list.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-sm text-white/50">
+                    Nenhum Processo Encontrado.
+                  </div>
+                ) : (
+                  <div 
+                    ref={containerRef}
+                    className="flex h-full flex-col flex-wrap gap-2 relative cdk-drop-list"
+                    data-cdk-drop-list-dragging={draggedIndex !== null ? "true" : undefined}
+                  >
+                    {col1.map((p, idx) => {
+                      const globalIndex = idx;
+                      return (
+                        <ProcessRow
+                          key={p.id}
+                          index={globalIndex}
+                          name={p.name}
+                          running={p.running}
+                          checked={p.checked}
+                          selected={p.selected}
+                          action={p.running ? t('process.stop') : t('process.start')}
+                          dragged={draggedIndex === globalIndex}
+                          dragOver={dragOverIndex === globalIndex}
+                          onToggleChecked={() => toggleChecked(p.id)}
+                          onAction={() => toggleRunning(p.id)}
+                          onContextMenu={(e) => openCtxMenu(e, p.id)}
+                          onDragStart={(e) => {
+                            setDraggedIndex(globalIndex);
+                            draggedElementRef.current = e.currentTarget;
+                            
+                            // Calcula o offset exato onde o usuário clicou no elemento
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            dragOffsetRef.current = {
+                              x: e.clientX - rect.left,
+                              y: e.clientY - rect.top
+                            };
+                            
+                            // Cria um preview customizado (clone do elemento)
+                            const clone = e.currentTarget.cloneNode(true);
+                            clone.classList.add('cdk-drag-preview');
+                            clone.style.position = 'fixed';
+                            clone.style.pointerEvents = 'none';
+                            clone.style.zIndex = '10000';
+                            clone.style.width = `${e.currentTarget.offsetWidth}px`;
+                            clone.style.height = `${e.currentTarget.offsetHeight}px`;
+                            
+                            // Posiciona o preview exatamente onde o elemento estava
+                            clone.style.left = `${rect.left}px`;
+                            clone.style.top = `${rect.top}px`;
+                            
+                            document.body.appendChild(clone);
+                            dragPreviewRef.current = clone;
+                            
+                            // Define o preview customizado (imagem transparente)
+                            e.dataTransfer.effectAllowed = 'move';
+                            const transparentImg = new Image();
+                            transparentImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                            e.dataTransfer.setDragImage(transparentImg, 0, 0);
+                          }}
+                          onDragEnd={() => {
+                            // Salva a lista reorganizada
+                            if (draggedIndex !== null) {
+                              persistList(list);
+                            }
+                            
+                            setDraggedIndex(null);
+                            setDragOverIndex(null);
+                            
+                            // Remove o preview
+                            if (dragPreviewRef.current) {
+                              dragPreviewRef.current.remove();
+                              dragPreviewRef.current = null;
+                            }
+                            draggedElementRef.current = null;
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        />
+                      );
+                    })}
+                  
+                    {col2.map((p, idx) => {
+                      const globalIndex = idx + MAX_PER_COL;
+                      return (
+                        <ProcessRow
+                          key={p.id}
+                          index={globalIndex}
+                          name={p.name}
+                          running={p.running}
+                          checked={p.checked}
+                          selected={p.selected}
+                          action={p.running ? t('process.stop') : t('process.start')}
+                          dragged={draggedIndex === globalIndex}
+                          dragOver={dragOverIndex === globalIndex}
+                          onToggleChecked={() => toggleChecked(p.id)}
+                          onAction={() => toggleRunning(p.id)}
+                          onContextMenu={(e) => openCtxMenu(e, p.id)}
+                          onDragStart={(e) => {
+                            setDraggedIndex(globalIndex);
+                            draggedElementRef.current = e.currentTarget;
+                            
+                            // Calcula o offset exato onde o usuário clicou no elemento
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            dragOffsetRef.current = {
+                              x: e.clientX - rect.left,
+                              y: e.clientY - rect.top
+                            };
+                            
+                            // Cria um preview customizado (clone do elemento)
+                            const clone = e.currentTarget.cloneNode(true);
+                            clone.classList.add('cdk-drag-preview');
+                            clone.style.position = 'fixed';
+                            clone.style.pointerEvents = 'none';
+                            clone.style.zIndex = '10000';
+                            clone.style.width = `${e.currentTarget.offsetWidth}px`;
+                            clone.style.height = `${e.currentTarget.offsetHeight}px`;
+                            
+                            // Posiciona o preview exatamente onde o elemento estava
+                            clone.style.left = `${rect.left}px`;
+                            clone.style.top = `${rect.top}px`;
+                            
+                            document.body.appendChild(clone);
+                            dragPreviewRef.current = clone;
+                            
+                            // Define o preview customizado (imagem transparente)
+                            e.dataTransfer.effectAllowed = 'move';
+                            const transparentImg = new Image();
+                            transparentImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                            e.dataTransfer.setDragImage(transparentImg, 0, 0);
+                          }}
+                          onDragEnd={() => {
+                            // Salva a lista reorganizada
+                            if (draggedIndex !== null) {
+                              persistList(list);
+                            }
+                            
+                            setDraggedIndex(null);
+                            setDragOverIndex(null);
+                            
+                            // Remove o preview
+                            if (dragPreviewRef.current) {
+                              dragPreviewRef.current.remove();
+                              dragPreviewRef.current = null;
+                            }
+                            draggedElementRef.current = null;
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+
+              </section>
+              )}
+
+              {/* DIREITA */}
+              <aside className="col-start-2 row-start-2 flex flex-col gap-4 pb-6 overflow-y-auto overflow-x-hidden">
+                {/* SEARCH */}
+                <div className="w-full">
+                  <div className="search-container flex h-[44px] items-center gap-3 rounded-full border border-white/35 bg-black/30 px-4">
+                    <input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={t('header.search')}
+                      className="ui-input ui-input--search flex-1 bg-transparent text-sm text-white/80 outline-none placeholder:text-white/50 min-w-0"
+                    />
+                    <svg
+                      className="h-5 w-5 text-white/60"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M10.5 18.5C14.6421 18.5 18 15.1421 18 11C18 6.85786 14.6421 3.5 10.5 3.5C6.35786 3.5 3 6.85786 3 11C3 15.1421 6.35786 18.5 10.5 18.5Z"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M20.9999 21L16.6499 16.65"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                <MetricCard title={t('metrics.totalCPU')} value={formatCpu(metrics.totalCpu)} />
+                <MetricCard title={t('metrics.totalRAM')} value={formatMemory(metrics.totalMemory)} />
+
+                <section data-glow className="rounded-[28px] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.55)] sm-glass-card">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="text-[16px] font-semibold text-white">
+                        {sqlType === 'mysql' ? 'MySQL' : 'SQL Server'} Connect
+                      </div>
+                      <span className={`h-2 w-2 rounded-full ${sqlConnected ? 'bg-[#30FF15]' : 'bg-[#FF0000]'}`} />
+                      <span className="text-xs text-white/35">{sqlConnected ? t('sql.online') : t('sql.offline')}</span>
+                    </div>
+                    
+                    {/* Botão de configurações */}
+                    <button
+                      type="button"
+                      onClick={() => setSqlConfigModal(true)}
+                      className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/10 transition-colors"
+                      aria-label="Configurações SQL"
+                    >
+                      <svg 
+                        className="w-5 h-5 text-white/60 hover:text-white/90 transition-colors" 
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                      >
+                        <path 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                          strokeWidth={2} 
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" 
+                        />
+                        <path 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                          strokeWidth={2} 
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" 
+                        />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="mt-6 space-y-4">
+                    <Field 
+                      placeholder={t('sql.serverPlaceholder')}
+                      value={sqlServer}
+                      onChange={(e) => setSqlServer(e.target.value)}
+                    />
+                    
+                    {/* Login e Porta lado a lado */}
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <Field 
+                          placeholder={t('sql.userPlaceholder')}
+                          value={sqlUser}
+                          onChange={(e) => setSqlUser(e.target.value)}
+                        />
+                      </div>
+                      <div className="w-[120px]">
+                        <Field 
+                          placeholder={sqlType === 'mysql' ? '3306' : '1433'} 
+                          type="password"
+                          value={sqlPort}
+                          onChange={(e) => setSqlPort(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    
+                    <Field
+                      placeholder={t('sql.passwordPlaceholder')}
+                      type="password"
+                      value={sqlPassword}
+                      onChange={(e) => setSqlPassword(e.target.value)}
+                    />
+                    
+                    {/* Dropdown tipo de banco + Botão Conectar */}
+                    <div className="flex gap-3">
+                      <div className="w-[140px]">
+                        <CustomSelect
+                          value={sqlType}
+                          onChange={(newValue) => setSqlType(newValue)}
+                          options={[
+                            { value: 'sqlserver', label: 'SQL Server' },
+                            { value: 'mysql', label: 'MySQL' }
+                          ]}
+                        />
+                      </div>
+                      
+                      <button 
+                        onClick={sqlConnected ? handleSqlDisconnect : handleSqlConnect}
+                        className="sm-sidebar-btn flex-1 h-[42px] rounded-[10px] bg-black/25 text-white font-semibold text-[13px] transition-all"
+                      >
+                        {sqlConnected ? t('sql.disconnect') : t('sql.connect')}
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </main>
+        </div>
+      </div>
+
+      
+      {/* MODAL CONFIGURAÇÕES SQL */}
+      {sqlConfigModal && (
+        <SqlConfigModal
+          backupPath={backupPath}
+          nextBackupDate={nextBackupDate}
+          backupRecurrence={backupRecurrence}
+          sqlDatabase={sqlDatabase}
+          sqlConnected={sqlConnected}
+          availableDatabases={availableDatabases}
+          onClose={() => setSqlConfigModal(false)}
+          onSelectFolder={async () => {
+            const folder = await window.mu.selectBackupFolder();
+            if (folder) setBackupPath(folder);
+          }}
+          onSelectDate={(date) => setNextBackupDate(date)}
+          onChangeDatabase={(db) => setSqlDatabase(db)}
+          onChangeRecurrence={(recurrence) => setBackupRecurrence(recurrence)}
+          onSave={handleSaveSqlConfig}
+          onBackupNow={handleSqlBackup}
+        />
+      )}
+
+      {/* CONTEXT MENU (processo) */}
+      {ctxMenu ? (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          proc={processes.find((p) => p.id === ctxMenu.id)}
+          onClose={() => setCtxMenu(null)}
+          onShow={() => showWindow(ctxMenu.id)}
+          onHide={() => hideWindow(ctxMenu.id)}
+          onStart={() => startOne(ctxMenu.id, { hidden: true })}
+          onStop={() => stopOne(ctxMenu.id)}
+          onRestart={() => restartOne(ctxMenu.id)}
+        />
+      ) : null}
+
+{/* TOAST NOTIFICAÇÕES */}
+      {toast && (
+        <div className="fixed right-[24px] bottom-[24px] z-[10000] animate-fade-in" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+          <div className="flex items-center gap-3 rounded-[14px] border border-white/10 px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-sm bg-black/60">
+            {/* Ícone dinâmico baseado no tipo */}
+            {toast.type === 'success' ? (
+              // Check icon para sucesso
+              <svg className="w-6 h-6 text-[#0056B9] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : toast.type === 'disconnect' ? (
+              // X icon para desconectado
+              <svg className="w-6 h-6 text-[#0056B9] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : toast.type === 'warning' ? (
+              // Info icon para avisos/validações
+              <svg className="w-6 h-6 text-[#0056B9] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ) : (
+              // Alerta para erro crítico
+              <svg className="w-6 h-6 text-[#0056B9] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            )}
+            
+            {/* Mensagem */}
+            <span className="text-[13px] font-medium text-white">{toast.message}</span>
+            
+            {/* Botão fechar */}
+            <button
+              onClick={() => setToast(null)}
+              className="ml-2 flex items-center justify-center w-5 h-5 rounded hover:bg-white/20 transition-colors flex-shrink-0"
+            >
+              <span className="text-white text-[16px] leading-none">×</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+{/* TOAST LOADING CONEXÃO DB */}
+      {isConnectingDb && (
+        <div className="fixed right-[24px] bottom-[24px] z-[10000] animate-fade-in" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+          <div className="flex items-center gap-3 rounded-[14px] border border-white/10 px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-sm bg-black/60">
+            {/* Spinner animado */}
+            <svg className="w-5 h-5 text-[#0056B9] flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            
+            {/* Mensagem com pontos animados e contador de tentativas */}
+            <span className="text-[13px] font-medium text-white loading-dots">
+              Conectando{connectionAttempt.total > 0 && ` (${connectionAttempt.current}/${connectionAttempt.total})`}
+            </span>
+          </div>
+        </div>
+      )}
+
+{/* TOAST UNDO */}
+      {undo ? (
+        <div className="fixed left-[24px] bottom-[24px] z-[999]">
+          <div className="flex items-center gap-3 rounded-[14px] bg-black/70 border border-white/10 px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
+            <div className="text-[12px] text-white/90">{undo.message}</div>
+            <button
+              type="button"
+              onClick={undoLast}
+              className="h-[28px] px-4 rounded-[10px] bg-[#0056B9] text-white text-[12px] font-semibold hover:bg-[#0066D9] transition-all"
+            >
+              Desfazer
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* CONFIRM MODAL */}
+      {confirmState ? (
+        <ConfirmModal
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText={confirmState.confirmText}
+          cancelText={confirmState.cancelText}
+          tone={confirmState.tone}
+          onCancel={() => closeConfirm(false)}
+          onConfirm={() => closeConfirm(true)}
+        />
+      ) : null}
+
+      {/* CRASH DETECTION MODAL */}
+      {crashState ? (
+        <CrashModal
+          processName={crashState.processName}
+          attempts={crashState.attempts}
+          maxAttempts={crashState.maxAttempts}
+          countdown={crashState.countdown}
+          needsManualIntervention={crashState.needsManualIntervention}
+          queueLength={crashQueueLength}
+          onCancel={cancelCrashRestart}
+          onSkipAndContinue={skipCrashAndContinue}
+          onManualRestart={manualRestartAfterCrash}
+        />
+      ) : null}
+
+      {/* CONSOLE MODAL */}
+      {consoleModalOpen ? (
+        <ConsoleModal
+          logs={consoleLogs}
+          onClose={() => setConsoleModalOpen(false)}
+          onClear={clearLogs}
+          language={language}
+          setLanguage={setLanguage}
+          handleLanguageChange={handleLanguageChange}
+          autoOKDialogs={autoOKDialogs}
+          setAutoOKDialogs={setAutoOKDialogs}
+        />
+      ) : null}
+
+      {/* MODAL DE FALHA NO AUTO-CONNECT */}
+      {autoConnectFailedModal ? (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div 
+            className="relative w-[920px] rounded-[14px] border border-white/10 bg-gradient-to-b from-[#0a0f1a] to-[#050810] shadow-[0_20px_60px_rgba(0,0,0,0.7)]"
+            data-glow
+          >
+            {/* BOTÃO X - CANTO SUPERIOR DIREITO ABSOLUTO */}
+            <button
+              onClick={() => setAutoConnectFailedModal(false)}
+              className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/5 transition-colors"
+            >
+              <svg className="h-5 w-5 text-white/60 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="flex">
+              {/* COLUNA ESQUERDA - AVISO */}
+              <div className="flex-1 p-6 border-r border-white/10">
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10">
+                    <svg className="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">{t('sql.autoConnectFailed')}</h3>
+                </div>
+
+                {/* Mensagem */}
+                <div className="space-y-3">
+                  <p className="text-sm text-white/80">
+                    {t('sql.autoConnectFailedMsg')}
+                  </p>
+                  
+                  <div className="rounded-[10px] bg-white/5 p-3 space-y-1.5">
+                    <p className="text-xs font-medium text-white/70">{t('sql.possibleCauses')}</p>
+                    <ul className="space-y-1 text-xs text-white/60">
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500 mt-0.5">•</span>
+                        <span>{t('sql.causeDbOff')}</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500 mt-0.5">•</span>
+                        <span>{t('sql.causeNetwork')}</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500 mt-0.5">•</span>
+                        <span>{t('sql.causeCredentials')}</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <p className="text-xs text-white/60 mt-4">
+                    {t('sql.verifyCredentials')}
+                  </p>
+                </div>
+              </div>
+
+              {/* COLUNA DIREITA - FORMULÁRIO */}
+              <div className="flex-1 p-6 bg-black/20">
+                <h4 className="text-sm font-semibold text-white mb-4">{t('sql.checkCredentials')}</h4>
+                
+                <div className="space-y-3">
+                  {/* Servidor */}
+                  <div>
+                    <label className="block text-xs font-medium text-white/70 mb-1.5">
+                      {t('sql.server')}
+                    </label>
+                    <input
+                      type="text"
+                      value={sqlServer}
+                      onChange={(e) => setSqlServer(e.target.value)}
+                      placeholder="Ex: localhost\SQLEXPRESS"
+                      className="w-full h-10 px-3 rounded-[10px] bg-black/40 backdrop-blur-sm border border-white/10 text-sm text-white focus:border-[#0056B9] focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  {/* Usuário */}
+                  <div>
+                    <label className="block text-xs font-medium text-white/70 mb-1.5">
+                      {t('sql.user')}
+                    </label>
+                    <input
+                      type="text"
+                      value={sqlUser}
+                      onChange={(e) => setSqlUser(e.target.value)}
+                      placeholder="Ex: sa"
+                      className="w-full h-10 px-3 rounded-[10px] bg-black/40 backdrop-blur-sm border border-white/10 text-sm text-white focus:border-[#0056B9] focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  {/* Senha */}
+                  <div>
+                    <label className="block text-xs font-medium text-white/70 mb-1.5">
+                      {t('sql.password')}
+                    </label>
+                    <input
+                      type="password"
+                      value={sqlPassword}
+                      onChange={(e) => setSqlPassword(e.target.value)}
+                      placeholder="••••••"
+                      className="w-full h-10 px-3 rounded-[10px] bg-black/40 backdrop-blur-sm border border-white/10 text-sm text-white focus:border-[#0056B9] focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  {/* Porta */}
+                  <div>
+                    <label className="block text-xs font-medium text-white/70 mb-1.5">
+                      {t('sql.port')}
+                    </label>
+                    <input
+                      type="text"
+                      value={sqlPort}
+                      onChange={(e) => setSqlPort(e.target.value)}
+                      placeholder="1433"
+                      className="w-full h-10 px-3 rounded-[10px] bg-black/40 backdrop-blur-sm border border-white/10 text-sm text-white focus:border-[#0056B9] focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  {/* Tipo - CustomSelect */}
+                  <div>
+                    <label className="block text-xs font-medium text-white/70 mb-1.5">
+                      {t('sql.type')}
+                    </label>
+                    <CustomSelect
+                      value={sqlType}
+                      onChange={(value) => setSqlType(value)}
+                      options={[
+                        { value: 'sqlserver', label: 'SQL Server' },
+                        { value: 'mysql', label: 'MySQL' }
+                      ]}
+                    />
+                  </div>
+
+                  {/* Botão Tentar Novamente */}
+                  <button
+                    onClick={async () => {
+                      setAutoConnectFailedModal(false);
+                      setIsConnectingDb(true);
+                      setConnectionAttempt({ current: 1, total: 1 });
+                      
+                      try {
+                        const result = await window.mu.sqlConnect({
+                          type: sqlType,
+                          server: sqlServer,
+                          user: sqlUser,
+                          password: sqlPassword,
+                          port: sqlPort
+                        });
+
+                        setIsConnectingDb(false);
+                        setConnectionAttempt({ current: 0, total: 0 });
+
+                        if (result.ok) {
+                          setSqlConnected(true);
+                          showToast(t('sql.connectSuccess'), 'success');
+                          
+                          // Salva credenciais
+                          await window.mu.sqlSaveConfig({
+                            type: sqlType,
+                            server: sqlServer,
+                            user: sqlUser,
+                            password: sqlPassword,
+                            database: sqlDatabase,
+                            port: sqlPort,
+                            backupPath: backupPath,
+                            nextBackupDate: nextBackupDate,
+                            backupRecurrence: backupRecurrence,
+                            manualDisconnect: false
+                          });
+
+                          // Busca databases
+                          if (window.mu?.sqlListDatabases && !isLoadingDatabases) {
+                            setIsLoadingDatabases(true);
+                            try {
+                              const dbResult = await window.mu.sqlListDatabases({ type: sqlType });
+                              if (dbResult && dbResult.ok && Array.isArray(dbResult.databases)) {
+                                setAvailableDatabases(dbResult.databases);
+                              } else {
+                                setAvailableDatabases([]);
+                              }
+                            } catch (err) {
+                              setAvailableDatabases([]);
+                            } finally {
+                              setIsLoadingDatabases(false);
+                            }
+                          }
+                        } else {
+                          setSqlConnected(false);
+                          showToast(result.error, 'error');
+                        }
+                      } catch (err) {
+                        setIsConnectingDb(false);
+                        setConnectionAttempt({ current: 0, total: 0 });
+                        showToast(`${t('sql.connectError')}: ${err.message}`, 'error');
+                      }
+                    }}
+                    className="w-full h-11 rounded-[10px] bg-[#0056B9] text-white text-sm font-semibold hover:bg-[#0056B9]/90 transition-colors mt-2"
+                  >
+                    {t('sql.tryAgain')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Botão Console (engrenagem) - Inferior Esquerdo */}
+      <button
+        type="button"
+        onClick={() => setConsoleModalOpen(true)}
+        className="fixed bottom-4 left-4 z-[100] w-10 h-10 flex items-center justify-center hover:scale-110 transition-all group"
+        title="Console & Informações"
+      >
+        <svg className="w-7 h-7 text-white/60 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      </button>
+
+        {/* Footer - Dev Credits - Canto inferior direito */}
+        <div className="fixed bottom-2 right-2 text-[10px] text-white/20 font-light z-[100] select-none pointer-events-none">
+          {t('common.footerCredits')}
+        </div>
+      </div>
+    </LanguageContext.Provider>
+  );
+}
+
+// Modal Console & Info
+function ConsoleModal({ logs, onClose, onClear, language, setLanguage, handleLanguageChange, autoOKDialogs, setAutoOKDialogs }) {
+  const [activeTab, setActiveTab] = React.useState('console'); // 'console' | 'info' | 'settings'
+  const { t } = useTranslation();
+  
+  const getLogTypeColor = (type) => {
+    switch (type) {
+      case 'sql-server': return 'text-blue-400';
+      case 'mysql': return 'text-cyan-400';
+      case 'process': return 'text-orange-400';
+      default: return 'text-white/70';
+    }
+  };
+
+  const getLogTypeLabel = (type) => {
+    switch (type) {
+      case 'sql-server': return 'SQL Server';
+      case 'mysql': return 'MySQL';
+      case 'process': return 'Processo';
+      default: return 'Sistema';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[3000] flex items-center justify-center px-6 animate-fade-in">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      
+      {/* Modal - Glass Morphism + Animação Apple */}
+      <div data-glow className="relative w-full max-w-[800px] h-[600px] rounded-[28px] bg-black/30 backdrop-blur-xl border border-white/10 shadow-[0_30px_90px_rgba(0,0,0,0.70)] animate-modal-appear sm-glass-card">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <svg className="w-6 h-6 text-[#0056B9]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <div className="text-[20px] font-semibold text-white">{t('console.title')}</div>
+          </div>
+          
+          {/* Botão fechar */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/10 transition-colors"
+          >
+            <span className="text-white/60 text-[22px] leading-none hover:text-white/90">×</span>
+          </button>
+        </div>
+
+        {/* Tabs - Estilo underline elegante */}
+        <div className="flex items-center gap-8 px-6 py-4 border-b border-white/10">
+          <button
+            type="button"
+            onClick={() => setActiveTab('console')}
+            className={`relative pb-2 text-[14px] font-medium transition-all ${
+              activeTab === 'console'
+                ? 'text-white'
+                : 'text-white/50 hover:text-white/70'
+            }`}
+          >
+            {t('console.tabErrors')}
+            {activeTab === 'console' && (
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#0056B9] rounded-full" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('info')}
+            className={`relative pb-2 text-[14px] font-medium transition-all ${
+              activeTab === 'info'
+                ? 'text-white'
+                : 'text-white/50 hover:text-white/70'
+            }`}
+          >
+            {t('console.tabInfo')}
+            {activeTab === 'info' && (
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#0056B9] rounded-full" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('settings')}
+            className={`relative pb-2 text-[14px] font-medium transition-all ${
+              activeTab === 'settings'
+                ? 'text-white'
+                : 'text-white/50 hover:text-white/70'
+            }`}
+          >
+            {t('console.tabSettings')}
+            {activeTab === 'settings' && (
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#0056B9] rounded-full" />
+            )}
+          </button>
+        </div>
+
+        {/* Content */}
+        <div key={`tab-${activeTab}-${logs.length}`} className="h-[calc(600px-140px)] overflow-y-auto overflow-x-hidden p-6">
+          {activeTab === 'console' ? (
+            <div>
+              {/* Header Console */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-[14px] text-white/70">
+                  {logs.length > 0 ? `${logs.length} ${t('console.errorsRegistered')}` : t('console.noErrors')}
+                </div>
+                {logs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={onClear}
+                    className="px-3 py-1.5 rounded-lg bg-black/40 border border-white/10 text-white/70 text-[12px] hover:bg-black/60 hover:text-white transition-all"
+                  >
+                    {t('console.clearLogs')}
+                  </button>
+                )}
+              </div>
+
+              {/* Logs */}
+              {logs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-white/40">
+                  <svg className="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-[14px]">{t('console.noErrorsDetected')}</div>
+                  <div className="text-[12px] text-white/30 mt-1">{t('console.errorsWillAppear')}</div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {logs.map((log) => (
+                    <div key={log.id} className="rounded-lg bg-black/40 border border-white/10 p-3">
+                      <div className="flex items-start gap-3">
+                        {/* Ícone de erro */}
+                        <svg className="flex-shrink-0 w-5 h-5 text-red-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        
+                        <div className="flex-1 min-w-0">
+                          {/* Tipo + Timestamp */}
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[12px] font-semibold ${getLogTypeColor(log.type)}`}>
+                              {getLogTypeLabel(log.type)}
+                            </span>
+                            <span className="text-[11px] text-white/40">
+                              {log.timestamp}
+                            </span>
+                          </div>
+                          
+                          {/* Mensagem */}
+                          <div className="text-[13px] text-white/80 leading-relaxed">
+                            {log.message}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : activeTab === 'info' ? (
+            <div className="space-y-8">
+              {/* Versão do App */}
+              <div className="space-y-2">
+                <div className="text-[12px] font-medium text-white/40 uppercase tracking-wide">
+                  {t('console.appVersion')}
+                </div>
+                <div className="text-[20px] font-semibold text-white">
+                  v1.0.0
+                </div>
+                <div className="text-[13px] text-white/50">
+                  MU Server Manager
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="h-px bg-white/10" />
+
+              {/* Desenvolvedor */}
+              <div className="space-y-2">
+                <div className="text-[12px] font-medium text-white/40 uppercase tracking-wide">
+                  {t('console.developer')}
+                </div>
+                <div className="text-[16px] font-medium text-white">
+                  Dev-Frostty
+                </div>
+                <div className="text-[12px] text-white/40">
+                  {t('console.copyright')}
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="h-px bg-white/10" />
+
+              {/* Suporte */}
+              <div className="space-y-2">
+                <div className="text-[12px] font-medium text-white/40 uppercase tracking-wide">
+                  {t('console.disclaimer')}
+                </div>
+                <div className="text-[13px] text-white/60 leading-relaxed max-w-md">
+                  {t('console.disclaimerText')}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-5 max-w-2xl mx-auto">
+              {/* ABA CONFIGURAÇÕES */}
+              {/* Seção: Idioma */}
+              <div>
+                <h2 className="text-[14px] font-semibold text-white mb-3 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                  </svg>
+                  {t('settings.languageTitle')}
+                </h2>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    {/* Português */}
+                    <button
+                      onClick={() => handleLanguageChange('pt-BR')}
+                      className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${
+                        language === 'pt-BR'
+                          ? 'bg-[#0056B9]/20 border-[#0056B9] shadow-sm'
+                          : 'bg-black/20 border-white/10 hover:border-white/25'
+                      }`}
+                    >
+                      <div className="text-left">
+                        <div className="text-[12px] font-medium text-white">{t('settings.portugueseBR')}</div>
+                        <div className="text-[10px] text-white/40">PT-BR</div>
+                      </div>
+                      <span className="text-[13px] font-semibold text-white/60">BR</span>
+                    </button>
+
+                    {/* English */}
+                    <button
+                      onClick={() => handleLanguageChange('en-US')}
+                      className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${
+                        language === 'en-US'
+                          ? 'bg-[#0056B9]/20 border-[#0056B9] shadow-sm'
+                          : 'bg-black/20 border-white/10 hover:border-white/25'
+                      }`}
+                    >
+                      <div className="text-left">
+                        <div className="text-[12px] font-medium text-white">{t('settings.englishUS')}</div>
+                        <div className="text-[10px] text-white/40">EN-US</div>
+                      </div>
+                      <span className="text-[13px] font-semibold text-white/60">US</span>
+                    </button>
+
+                    {/* Español */}
+                    <button
+                      onClick={() => handleLanguageChange('es-ES')}
+                      className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${
+                        language === 'es-ES'
+                          ? 'bg-[#0056B9]/20 border-[#0056B9] shadow-sm'
+                          : 'bg-black/20 border-white/10 hover:border-white/25'
+                      }`}
+                    >
+                      <div className="text-left">
+                        <div className="text-[12px] font-medium text-white">{t('settings.spanishES')}</div>
+                        <div className="text-[10px] text-white/40">ES-ES</div>
+                      </div>
+                      <span className="text-[13px] font-semibold text-white/60">ES</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Separador */}
+              <div className="border-t border-white/10"></div>
+
+              {/* Seção: Auto OK em Diálogos */}
+              {/* Auto OK Section - Apenas para versão ADMIN */}
+              {IS_ADMIN_VERSION && (
+              <div>
+                <h2 className="text-[14px] font-semibold text-white mb-3 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/>
+                    <path d="M22 12A10 10 0 0 0 12 2v10z"/>
+                  </svg>
+                  {t('settings.autoOKTitle')}
+                </h2>
+                
+                <div className="space-y-2">
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/10">
+                    <div className="flex-1">
+                      <div className="text-[12px] font-medium text-white">
+                        {t('settings.autoOKLabel')}
+                      </div>
+                      <div className="text-[10px] text-white/50 mt-0.5">
+                        {t('settings.autoOKHelp')}
+                      </div>
+                    </div>
+                    
+                    {/* Toggle Switch */}
+                    <button
+                      onClick={() => setAutoOKDialogs(!autoOKDialogs)}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                        autoOKDialogs ? 'bg-[#0056B9]' : 'bg-white/20'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                          autoOKDialogs ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Info/Warning */}
+                  {autoOKDialogs && (
+                    <div className="flex items-start gap-2 p-2 rounded-lg bg-[#0056B9]/10 border border-[#0056B9]/30">
+                      <svg className="w-4 h-4 text-[#0056B9] flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div className="text-[10px] text-white/80 leading-relaxed">
+                        {t('settings.autoOKActiveInfo')}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              )}
+
+              {/* Separador */}
+              <div className="border-t border-white/10"></div>
+
+              {/* Informações da Versão */}
+              <div className="pt-2">
+                <div className="text-[11px] text-white/40 text-center">
+                  <p>{t('settings.version')}</p>
+                  <p className="mt-1">{t('settings.developedBy')}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SqlConfigModal({ backupPath, nextBackupDate, backupRecurrence, sqlDatabase, sqlConnected, availableDatabases = [], onClose, onSelectFolder, onSelectDate, onSave, onChangeDatabase, onBackupNow, onChangeRecurrence }) {
+  const { t } = useTranslation();
+  const [showDatePicker, setShowDatePicker] = React.useState(false);
+  const [tempDate, setTempDate] = React.useState('');
+  const [tempTime, setTempTime] = React.useState('');
+
+  const formatNextBackup = () => {
+    if (!nextBackupDate) return t('backup.noDateSet');
+    const date = new Date(nextBackupDate);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} às ${hours}:${minutes}`;
+  };
+
+  const handleSaveDate = () => {
+    if (tempDate && tempTime) {
+      const dateTime = new Date(`${tempDate}T${tempTime}`);
+      onSelectDate(dateTime.toISOString());
+      setShowDatePicker(false);
+      setTempDate('');
+      setTempTime('');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center px-6">
+      {/* backdrop */}
+      <button
+        type="button"
+        aria-label="Fechar"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/65"
+      />
+
+      {/* modal */}
+      <div className="relative w-full max-w-[500px] rounded-[22px] bg-[#111111] border border-white/10 shadow-[0_30px_90px_rgba(0,0,0,0.70)] p-5 sm-glass-card">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <svg 
+              className="w-7 h-7 text-[#0056B9]" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" 
+              />
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" 
+              />
+            </svg>
+            <div className="flex items-center gap-2.5">
+              <div className="text-[16px] font-semibold text-white">{t('backup.title')}</div>
+              {/* Status de conexão */}
+              <div className="flex items-center gap-1.5">
+                <div className={`w-2 h-2 rounded-full ${sqlConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="text-[10px] text-white/60">
+                  {sqlConnected ? 'Online' : 'Offline'}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {/* Botão X */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-white/10 transition-colors"
+            aria-label="Fechar"
+          >
+            <span className="text-white/60 text-[18px] leading-none hover:text-white/90">×</span>
+          </button>
+        </div>
+
+        <div className="mt-1 h-px bg-white/10" />
+
+        {/* Conteúdo */}
+        <div className="mt-4 space-y-4">
+          {/* Aviso se não estiver conectado */}
+          {!sqlConnected && (
+            <div className="flex items-start gap-2 rounded-[12px] bg-yellow-500/10 border border-yellow-500/20 px-3 py-2.5">
+              <svg className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <div className="text-[11px] font-semibold text-yellow-400">{t('backup.dbDisconnected')}</div>
+                <div className="text-[10px] text-yellow-300/80 mt-0.5">
+                  {t('backup.dbDisconnectedHelp')}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Nome do Database */}
+          <div>
+            <label className="block text-[12px] font-medium text-white/90 mb-1.5">
+              {t('backup.databaseLabel')}
+            </label>
+            <CustomSelect
+              value={sqlDatabase}
+              onChange={(value) => onChangeDatabase(value)}
+              disabled={!sqlConnected || !Array.isArray(availableDatabases) || availableDatabases.length === 0}
+              options={
+                sqlConnected && Array.isArray(availableDatabases) && availableDatabases.length > 0
+                  ? [
+                      { value: 'Todos', label: '✓ Todos (fazer backup de todos)' },
+                      ...availableDatabases.map(db => ({ value: db, label: db }))
+                    ]
+                  : [{ value: sqlDatabase, label: sqlDatabase }]
+              }
+            />
+            <p className="mt-1.5 text-[10px] text-white/50">
+              {sqlDatabase === 'Todos' ? t('backup.backupAllHelp') : t('backup.backupSingleHelp')}
+            </p>
+          </div>
+
+          {/* Pasta de Backup */}
+          <div>
+            <label className="block text-[12px] font-medium text-white/90 mb-1.5">
+              {t('backup.backupPath')}
+            </label>
+            <div className="flex items-center gap-2.5">
+              <div className="flex-1 h-[40px] px-3.5 rounded-[10px] bg-black/40 backdrop-blur-sm border border-white/10 flex items-center text-[12px] text-white/70 truncate">
+                {backupPath || t('backup.noFolderSelected')}
+              </div>
+              <button
+                type="button"
+                onClick={onSelectFolder}
+                className="h-[40px] px-3.5 rounded-[10px] bg-black/40 backdrop-blur-sm border border-white/10 text-white/90 text-[12px] font-medium hover:bg-[#0056B9] hover:border-[#0056B9] transition-all flex items-center gap-2"
+              >
+                <svg 
+                  className="w-4 h-4" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" 
+                  />
+                </svg>
+                {t('backup.browse')}
+              </button>
+            </div>
+          </div>
+
+          {/* Próxima Data de Backup */}
+          <div>
+            <label className="block text-[12px] font-medium text-white/90 mb-1.5">
+              {t('backup.scheduleTitle')}
+            </label>
+            <div className="flex items-center gap-2.5">
+              <div className="flex-1 h-[40px] px-3.5 rounded-[10px] bg-black/40 backdrop-blur-sm border border-white/10 flex items-center justify-between text-[12px] text-white/90">
+                <div className="flex items-center gap-2.5">
+                  <svg 
+                    className="w-4 h-4 text-[#0056B9]" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" 
+                    />
+                  </svg>
+                  <span>{formatNextBackup()}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDatePicker(!showDatePicker)}
+                className="h-[40px] px-4 rounded-[10px] bg-black/40 backdrop-blur-sm border border-white/10 text-white/90 text-[12px] font-semibold hover:bg-[#0056B9] hover:border-[#0056B9] transition-all"
+              >
+                {t('backup.setDate')}
+              </button>
+            </div>
+            
+            {/* Date Picker Inline com animação suave */}
+            {showDatePicker && (
+              <div 
+                className="mt-2.5 p-3 rounded-[12px] bg-black/30 backdrop-blur-sm border border-white/10 space-y-2.5 animate-fade-in"
+                style={{
+                  animation: 'fadeIn 0.2s ease-out'
+                }}
+              >
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] text-white/70 mb-1.5">{t('backup.dateLabel')}</label>
+                    <input
+                      type="date"
+                      value={tempDate}
+                      onChange={(e) => setTempDate(e.target.value)}
+                      className="w-full h-[38px] px-3 rounded-[10px] bg-black/40 border border-white/10 text-[12px] text-white focus:border-[#0056B9] focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-white/70 mb-1.5">{t('backup.timeLabel')}</label>
+                    <input
+                      type="time"
+                      value={tempTime}
+                      onChange={(e) => setTempTime(e.target.value)}
+                      className="w-full h-[38px] px-3 rounded-[10px] bg-black/40 border border-white/10 text-[12px] text-white focus:border-[#0056B9] focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDatePicker(false);
+                      setTempDate('');
+                      setTempTime('');
+                    }}
+                    className="h-[34px] px-3.5 rounded-[10px] bg-black/40 border border-white/10 text-white/80 text-[11px] font-medium hover:bg-black/50 transition-all"
+                  >
+                    {t('backup.cancelDate')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveDate}
+                    disabled={!tempDate || !tempTime}
+                    className="h-[34px] px-3.5 rounded-[10px] bg-[#0056B9] text-white text-[11px] font-medium hover:bg-[#0066D9] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {t('backup.confirmDate')}
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            <p className="mt-1.5 text-[10px] text-white/50 leading-relaxed">
+              {t('backup.scheduleHelp')}
+            </p>
+          </div>
+
+          {/* Recorrência de Backup */}
+          <div>
+            <label className="block text-[12px] font-medium text-white/90 mb-1.5">
+              {t('backup.recurrenceTitle')}
+            </label>
+            <CustomSelect
+              value={backupRecurrence}
+              onChange={(value) => onChangeRecurrence(value)}
+              options={[
+                { value: 'none', label: t('backup.recurrenceNone') },
+                { value: 'once', label: t('backup.recurrenceOnce') },
+                { value: 'daily', label: t('backup.recurrenceDaily') },
+                { value: 'weekly', label: t('backup.recurrenceWeekly') },
+                { value: 'monthly', label: t('backup.recurrenceMonthly') }
+              ]}
+            />
+            <p className="mt-1.5 text-[10px] text-white/50 leading-relaxed">
+              {backupRecurrence === 'none' && t('backup.recurrenceNoneHelp')}
+              {backupRecurrence === 'once' && t('backup.recurrenceOnceHelp')}
+              {backupRecurrence === 'daily' && t('backup.recurrenceDailyHelp')}
+              {backupRecurrence === 'weekly' && t('backup.recurrenceWeeklyHelp')}
+              {backupRecurrence === 'monthly' && t('backup.recurrenceMonthlyHelp')}
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-5 flex items-center justify-between gap-2.5">
+          {/* Botão Backup Agora à esquerda */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (onBackupNow) {
+                onBackupNow();
+              }
+            }}
+            disabled={!sqlConnected}
+            className="h-[36px] px-4 rounded-[10px] bg-black/40 backdrop-blur-sm border border-white/10 text-white/90 text-[12px] font-medium hover:bg-[#0056B9] hover:border-[#0056B9] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-black/40 disabled:hover:border-white/10 flex items-center gap-2"
+          >
+            <svg 
+              className="w-4 h-4" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" 
+              />
+            </svg>
+            {t('backup.backupNow')}
+          </button>
+
+          {/* Botões Cancelar e Salvar à direita */}
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-[36px] px-4 rounded-[10px] bg-black/40 backdrop-blur-sm border border-white/10 text-white/90 text-[12px] font-medium hover:bg-black/50 hover:border-white/20 transition-all"
+            >
+              {t('backup.cancel')}
+            </button>
+
+            <button
+              type="button"
+              onClick={onSave}
+              className="h-[36px] px-4 rounded-[10px] bg-[#0056B9] text-white text-[12px] font-medium hover:bg-[#0066D9] transition-all shadow-[0_0_20px_rgba(0,86,185,0.3)]"
+            >
+              {t('backup.save')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SidebarButton({
+  tone = "primary",
+  icon = "dot",
+  children,
+  onClick,
+  disabled = false,
+}) {
+  const base =
+    "h-[35px] w-full rounded-[10px] flex items-center gap-3 px-4 text-[13px]";
+  const primary = "border border-[#0056B9] bg-black/25 text-white";
+  const ghost = "border border-white/15 bg-black/25 text-white";
+  const disabledCls = "opacity-50 cursor-not-allowed";
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={disabled ? undefined : onClick}
+      className={`${base} ${tone === "ghost" ? ghost : primary} ${tone === "ghost" ? "sm-tone-ghost" : "sm-tone-primary"} sm-sidebar-btn ${disabled ? disabledCls : ""}`}
+    >
+      <span className="inline-flex h-5 w-5 items-center justify-center">
+        <SidebarIcon name={icon} />
+      </span>
+      <span className="truncate">{children}</span>
+    </button>
+  );
+}
+
+function SidebarIcon({ name }) {
+  // Usa o componente Icon da biblioteca
+  return <Icon name={name} className="h-4 w-4" />;
+}
+
+function MetricCard({ title, value }) {
+  return (
+    <div data-glow className="rounded-[18px] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.55)] sm-glass-card">
+      <div className="flex items-center justify-between">
+        <div className="font-semibold text-white">{title}</div>
+        <div className="text-white/90">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function ProcessRow({
+  index,
+  name,
+  running,
+  checked,
+  action,
+  selected,
+  dragged,
+  dragOver,
+  onToggleChecked,
+  onAction,
+  onContextMenu,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+}) {
+  const border = selected
+    ? "border-[#0056B9] shadow-[0_0_0_1px_rgba(0,86,185,0.25)]"
+    : "border-transparent";
+
+  return (
+    <div
+      draggable
+      data-index={index}
+      onContextMenu={onContextMenu}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      data-cdk-drag-over={dragOver ? "true" : undefined}
+      className={[
+        "min-w-[calc(50%-1rem)] h-[44px] min-w-0 rounded-[12px] border px-3 xl:px-4 flex items-center justify-between sm-glass-card-sm relative cursor-move cdk-drag",
+        border,
+        dragged ? "cdk-drag-placeholder" : "",
+      ].join(" ")}
+    >
+      <div className="flex min-w-0 items-center gap-2 xl:gap-3">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={checked}
+          onClick={onToggleChecked}
+          className={[
+            "h-[18px] w-[18px] rounded-[4px] flex items-center justify-center",
+            checked ? "bg-[#0056B9]" : "bg-white/10 border border-white/10",
+          ].join(" ")}
+        >
+          {checked ? <Icon name="check" className="h-[14px] w-[14px]" /> : null}
+        </button>
+
+        <span className="min-w-0 flex-1 truncate text-[12px] xl:text-[14px] text-white">
+          {name}
+        </span>
+
+        <span
+          className={[
+            "h-2 w-2 rounded-full",
+            running ? "bg-[#30FF15]" : "bg-[#FF0000]",
+          ].join(" ")}
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={onAction}
+        className="ui-chip ui-chip-premium h-[28px] w-[84px] rounded-[12px] flex items-center justify-center gap-2 text-[12px] font-regular text-white"
+      >
+        {!running ? (
+          <Icon name="play" className="h-[12px] w-[12px]" />
+        ) : (
+          <Icon name="stop" className="h-[12px] w-[12px]" />
+        )}
+        <span>{action}</span>
+      </button>
+    </div>
+  );
+}
+
+function Field({ placeholder, type = "text", value, onChange }) {
+  const isPassword = type === "password";
+  const [show, setShow] = React.useState(false);
+
+  const actualType = isPassword ? (show ? "text" : "password") : type;
+
+  return (
+    <div className="relative">
+      <input
+        type={actualType}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        aria-label={placeholder}
+        className="ui-input h-[38px] w-full rounded-[12px] bg-black/35 border border-white/10 px-4 pr-10 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-white/25"
+      />
+
+      {isPassword && (
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          aria-label={show ? "Ocultar senha" : "Mostrar senha"}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/45 hover:text-white/80"
+        >
+          {show ? (
+            // eye-off
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M3 3l18 18"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M9.88 5.09A10.94 10.94 0 0112 5c5.5 0 9.5 4.5 10.5 7-0.46 1.16-1.47 2.78-3.02 4.2"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M6.11 6.11C3.9 7.6 2.5 10 1.5 12c1 2.5 5 7 10.5 7 1.1 0 2.14-.18 3.1-.5"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          ) : (
+            // eye
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M12 15a3 3 0 100-6 3 3 0 000 6z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ContextMenu({ x, y, proc, onClose, onShow, onHide, onStart, onStop, onRestart }) {
+  const running = !!proc?.running;
+  const hidden = !!proc?.windowHidden;
+
+  return (
+    <div
+      className="fixed z-[2500]"
+      style={{ left: x, top: y }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <div className="min-w-[200px] rounded-[14px] border border-white/10 bg-[#111111] shadow-[0_20px_60px_rgba(0,0,0,0.65)] p-2 sm-glass-card">
+        {/* Header com nome e botão fechar */}
+        <div className="flex items-center justify-between px-2 py-1">
+          <div className="text-[12px] text-[#0056B9] font-medium truncate">
+            {proc?.name ?? "Processo"}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-2 flex-shrink-0 h-5 w-5 rounded flex items-center justify-center hover:bg-white/10 transition-colors"
+            aria-label="Fechar"
+          >
+            <span className="text-white/60 text-[16px] leading-none hover:text-white/90">×</span>
+          </button>
+        </div>
+        <div className="mt-1 h-px bg-white/10" />
+
+        <MenuItem disabled={!running || !hidden} onClick={() => { onShow(); onClose(); }}>
+          Show (mostrar janela)
+        </MenuItem>
+        <MenuItem disabled={!running || hidden} onClick={() => { onHide(); onClose(); }}>
+          Hide (ocultar janela)
+        </MenuItem>
+
+        <div className="my-1 h-px bg-white/10" />
+
+        {running ? (
+          <>
+            <MenuItem onClick={() => { onRestart(); onClose(); }}>Reiniciar</MenuItem>
+            <MenuItem tone="danger" onClick={() => { onStop(); onClose(); }}>Parar</MenuItem>
+          </>
+        ) : (
+          <MenuItem onClick={() => { onStart(); onClose(); }}>Iniciar</MenuItem>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MenuItem({ children, onClick, disabled, tone }) {
+  const danger = tone === "danger";
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={[
+        "w-full text-left px-3 py-2 rounded-[10px] text-[13px] transition",
+        disabled ? "opacity-40 cursor-not-allowed" : "hover:bg-white/5",
+        danger ? "text-[#FF0000]" : "text-white/90",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}

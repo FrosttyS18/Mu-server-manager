@@ -1,0 +1,53 @@
+@import "tailwindcss";
+@import "./override.css";
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+
+  /* Paleta do seu Figma */
+  --bg: #050505;
+  --panel: #111111;
+  --panel-2: #1f1f1f;
+  --text: #ffffff;
+  --muted: #616161;
+  --primary: #0056b9;
+  --success: #30ff15;
+  --danger: #ff0000;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent; /* Transparente para janela arredondada funcionar */
+  color: var(--text);
+  overflow: hidden; /* Previne scroll no body */
+}
+
+/* Scrollbar premium (Electron/Chromium) */
+::-webkit-scrollbar {
+  width: 12px;   /* era 10 -> um pouco mais grossa */
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+/* Isso aqui evita encostar no rounded do box */
+::-webkit-scrollbar-track-piece {
+  margin: 12px 0; /* afasta topo/baixo */
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent; /* era 3 -> deixa menos “fina” */
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}

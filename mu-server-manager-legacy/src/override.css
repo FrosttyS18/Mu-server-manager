@@ -1,0 +1,966 @@
+/* ---------------------------------------------------------------------------
+   override.css — visual skin layer (no layout refactor)
+   - Keeps the rainbow/glow button style
+   - Adds cyan/blue internal neon ONLY inside the main black panel (.sm-main-panel)
+   - Glass cards via .sm-glass-card hook
+   - Shadows are controllable via variables (default = 0)
+--------------------------------------------------------------------------- */
+
+:root{
+  /* Brand */
+  --sm-primary: 0, 86, 185;
+
+  /* Rainbow (button aesthetic) */
+  --sm-rainbow: linear-gradient(90deg,
+    rgba(0, 255, 255, 1),
+    rgba(0, 160, 255, 1),
+    rgba(0, 86, 185, 1),
+    rgba(120, 90, 255, 1),
+    rgba(0, 255, 255, 1)
+  );
+
+  /* Glass controls */
+  --sm-glass-alpha: .38;      /* card background opacity */
+  --sm-glass-blur: 54px;      /* card blur */
+  --sm-glass-border: rgba(255, 255, 255, 0.1);
+
+  /* Shadows (keep as variables so you can increase later) */
+  --sm-shadow-panel: none;
+  --sm-shadow-card: none;
+
+  /* Painel PRETO NEON (main panel only) */
+  --sm-neon-alpha: .65;       /* intensity - reduzida para mesclar melhor */
+  --sm-neon-blur: 180px;      /* softness */
+  --sm-neon-speed: 12s;       /* animation speed - mais lento e suave */
+  --sm-neon-c1: rgb(0, 140, 160);      /* Aqua escuro */
+  --sm-neon-c2: rgb(0, 100, 150);      /* Azul escuro */
+  --sm-neon-c3: rgb(10, 10, 20);       /* Quase preto */
+  --sm-neon-c4: rgb(0, 120, 140);      /* Azul petróleo */
+}
+
+/* -----------------------------
+   App Shell - Garante bordas arredondadas na janela transparente
+------------------------------ */
+.sm-app-shell {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+}
+
+/* -----------------------------
+   Sidebar background - Glass Morphism (igual aos cards)
+------------------------------ */
+.sm-sidebar{
+  background: rgba(23, 23, 23, var(--sm-glass-alpha));
+  backdrop-filter: blur(var(--sm-glass-blur)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--sm-glass-blur)) saturate(1.2);
+  border-right: 1px solid var(--sm-glass-border);
+}
+
+/* -----------------------------
+   Base button/chip/input hooks
+------------------------------ */
+.ui-btn,
+.sm-sidebar-btn,
+.ui-chip{
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* -----------------------------
+   Rainbow/Glow button skin (approved)
+   - Keeps your current sizing/padding (we don't touch layout)
+   - Glow "walking" along the outline (based on the SCSS you sent)
+   Applies to sidebar buttons + SQL button (.ui-btn)
+------------------------------ */
+
+/* Spectrum used by the walking outline */
+:root{
+  --sm-btn-spectrum: linear-gradient(
+    to right,
+    rgba(255,255,255,1),
+    rgba(255,255,255,1),
+    rgba(0,255,255,1),
+    rgba(0,160,255,1),
+    rgba(0,86,185,1),
+    rgba(122,92,255,1),
+    rgba(255,0,221,1),
+    rgba(255,59,59,1),
+    rgba(255,216,74,1),
+    rgba(48,255,21,1),
+    rgba(255,255,255,1),
+    rgba(255,255,255,1)
+  );
+}
+
+.sm-sidebar-btn,
+.ui-btn{
+  position: relative;
+  isolation: isolate;
+  /* keep your current padding/sizing from JSX */
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: none;
+  overflow: visible; /* IMPORTANT: let the glow live outside */
+  transition: transform 200ms cubic-bezier(.2,.8,.2,1), filter 180ms ease, border-color 180ms ease;
+  /* tunables (you can tweak if needed) */
+  --sm-btn-border: 2px;          /* outline thickness */
+  --sm-btn-glow-blur: 80px;      /* glow softness */
+  --sm-btn-glow-opacity: 0;      /* default off */
+  --sm-btn-outline-opacity: 0;   /* default off */
+  --sm-btn-walk-ms: 2600ms;      /* walking speed */
+}
+
+/* keep the content above */
+.sm-sidebar-btn > *,
+.ui-btn > *{
+  position: relative;
+  z-index: 2;
+}
+
+/* Ícones brancos nos botões do sidebar */
+.sm-sidebar-btn img {
+  filter: brightness(0) invert(1) opacity(0.8);
+  transition: filter 180ms ease;
+}
+
+/* Hover: ícones ficam 100% brancos */
+.sm-sidebar-btn:hover img {
+  filter: brightness(0) invert(1) opacity(1);
+}
+
+/* -----------------------------
+   Botões de ação premium (Iniciar/Parar nos processos)
+------------------------------ */
+.ui-chip-premium {
+  position: relative;
+  isolation: isolate;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0, 0, 0, 0.267);
+  backdrop-filter: blur(8px);
+  box-shadow: none;
+  overflow: visible;
+  transition: all 180ms ease;
+}
+
+/* Conteúdo acima */
+.ui-chip-premium > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Ícones brancos nos botões de ação */
+.ui-chip-premium img {
+  filter: brightness(0) invert(1) opacity(0.8);
+  transition: filter 180ms ease;
+}
+
+/* Hover: sutil */
+.ui-chip-premium:hover {
+  border-color: rgba(255,255,255,.2);
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* Hover: ícones 100% brancos */
+.ui-chip-premium:hover img {
+  filter: brightness(0) invert(1) opacity(1);
+}
+
+/* Active: pressiona */
+.ui-chip-premium:active {
+  transform: scale(0.98);
+}
+
+/* blurred glow (ring-only; no fill) */
+.sm-sidebar-btn::after,
+.ui-btn::after{
+  content:"";
+  position:absolute;
+  /* slightly outside so the blur lives around the button, not inside */
+  inset: calc((var(--sm-btn-border) + 2px) * -1);
+  border-radius: calc(12px + var(--sm-btn-border) + 2px);
+  padding: calc(var(--sm-btn-border) + 2px);
+  box-sizing: border-box;
+
+  background: var(--sm-btn-spectrum) no-repeat 100% 0 / 900% 100%;
+  filter: blur(var(--sm-btn-glow-blur));
+  opacity: var(--sm-btn-glow-opacity);
+  z-index: 0;
+  pointer-events: none;
+
+  /* show only the ring */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+}
+
+
+/* crisp outline (ring-only; no fill) */
+.sm-sidebar-btn::before,
+.ui-btn::before{
+  content:"";
+  position:absolute;
+  inset: calc(var(--sm-btn-border) * -1);
+  border-radius: calc(12px + var(--sm-btn-border));
+  padding: var(--sm-btn-border);
+  box-sizing: border-box;
+
+  background: var(--sm-btn-spectrum) no-repeat 100% 0 / 900% 100%;
+  opacity: var(--sm-btn-outline-opacity);
+  z-index: 1;
+  pointer-events: none;
+
+  /* show only the ring */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+}
+
+
+/* Hover/focus = turn on and walk */
+.sm-sidebar-btn:not(:disabled):hover,
+.sm-sidebar-btn:not(:disabled):focus-visible,
+.ui-btn:not(:disabled):hover,
+.ui-btn:not(:disabled):focus-visible{
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  border-color: rgba(var(--sm-primary), .55);
+
+  /* >>> É AQUI que entra o glow estilo "aura" <<< */
+  box-shadow:
+    0 0 0 1px rgba(var(--sm-primary), .65),
+    0 0 18px rgba(var(--sm-primary), .38),
+    0 0 42px rgba(var(--sm-primary), .30);
+
+  --sm-btn-outline-opacity: 1;
+  --sm-btn-glow-opacity: .32;
+}
+
+.sm-sidebar-btn:not(:disabled):hover::before,
+.sm-sidebar-btn:not(:disabled):hover::after,
+.sm-sidebar-btn:not(:disabled):focus-visible::before,
+.sm-sidebar-btn:not(:disabled):focus-visible::after,
+.ui-btn:not(:disabled):hover::before,
+.ui-btn:not(:disabled):hover::after,
+.ui-btn:not(:disabled):focus-visible::before,
+.ui-btn:not(:disabled):focus-visible::after{
+  animation: smBtnWalk var(--sm-btn-walk-ms) linear infinite;
+}
+
+@keyframes smBtnWalk{
+  from { background-position: 100% 0; }
+  to   { background-position: 0% 0; }
+}
+
+@keyframes fadeIn{
+  from { 
+    opacity: 0; 
+    transform: translateY(-10px) scale(0.98);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Animação Apple-style para modal */
+@keyframes modalAppear{
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-appear {
+  animation: modalAppear 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* Animação lenta para engrenagem */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 20s linear infinite;
+}
+
+.sm-sidebar-btn:not(:disabled):active,
+.ui-btn:not(:disabled):active{
+  transform: translateY(0px) scale(.99);
+  filter: brightness(1.02);
+  --sm-btn-glow-opacity: .52;
+}
+
+.sm-sidebar-btn:disabled,
+.ui-btn:disabled{
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.sm-sidebar-btn:disabled::before,
+.sm-sidebar-btn:disabled::after,
+.ui-btn:disabled::before,
+.ui-btn:disabled::after{
+  opacity: 0 ;
+  animation: none ;
+}
+
+
+/* -----------------------------
+   Inputs
+------------------------------ */
+.ui-input{
+  position: relative;
+  isolation: isolate;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0,0,0,.32);
+  box-shadow: none;
+  overflow: visible; /* IMPORTANT: let the glow live outside */
+  transition: border-color 180ms ease, filter 180ms ease, box-shadow 180ms ease;
+  /* tunables (mesmos valores dos botões) */
+  --sm-btn-border: 2px;
+  --sm-btn-glow-blur: 80px;
+  --sm-btn-glow-opacity: 0;
+  --sm-btn-outline-opacity: 0;
+  --sm-btn-walk-ms: 2600ms;
+}
+
+/* keep the content above */
+.ui-input > *{
+  position: relative;
+  z-index: 2;
+}
+
+/* blurred glow (ring-only; no fill) - igual aos botões */
+.ui-input::after{
+  content:"";
+  position:absolute;
+  inset: calc((var(--sm-btn-border) + 2px) * -1);
+  border-radius: calc(12px + var(--sm-btn-border) + 2px);
+  padding: calc(var(--sm-btn-border) + 2px);
+  box-sizing: border-box;
+  background: var(--sm-btn-spectrum) no-repeat 100% 0 / 900% 100%;
+  filter: blur(var(--sm-btn-glow-blur));
+  opacity: var(--sm-btn-glow-opacity);
+  z-index: 0;
+  pointer-events: none;
+  /* show only the ring */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* crisp outline (ring-only; no fill) - igual aos botões */
+.ui-input::before{
+  content:"";
+  position:absolute;
+  inset: calc(var(--sm-btn-border) * -1);
+  border-radius: calc(12px + var(--sm-btn-border));
+  padding: var(--sm-btn-border);
+  box-sizing: border-box;
+  background: var(--sm-btn-spectrum) no-repeat 100% 0 / 900% 100%;
+  opacity: var(--sm-btn-outline-opacity);
+  z-index: 1 ;
+  pointer-events: none;
+  /* show only the ring */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+.ui-input:hover{
+  filter: brightness(1.03);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Focus = turn on glow and walk - igual aos botões */
+.ui-input:focus,
+.ui-input:focus-visible{
+  outline: none ;
+  border: 1px solid transparent ; /* Remove borda para mostrar o gradiente do ::before */
+  filter: brightness(1.06);
+  
+  /* Box shadow igual aos botões */
+  box-shadow:
+    0 0 0 1px rgba(var(--sm-primary), .65),
+    0 0 18px rgba(var(--sm-primary), .38),
+    0 0 42px rgba(var(--sm-primary), .30) ;
+  
+  /* Ativa o glow e outline - igual aos botões */
+  --sm-btn-outline-opacity: 1 ;
+  --sm-btn-glow-opacity: .32 ;
+}
+
+/* Ativa a animação quando focado - igual aos botões */
+.ui-input:focus::before,
+.ui-input:focus::after,
+.ui-input:focus-visible::before,
+.ui-input:focus-visible::after{
+  animation: smBtnWalk var(--sm-btn-walk-ms) linear infinite;
+}
+
+/* Remove focus ring just for search (as you liked) */
+.ui-input--search{
+  border: none ;
+  background: transparent ;
+  padding: 0 4px ; /* Padding horizontal para o cursor não ficar espremido */
+  caret-color: rgba(255, 255, 255, 0.9); /* Cursor de texto visível */
+  transition: none ; /* Remove qualquer transição */
+  position: relative ;
+}
+
+/* Remove todos os efeitos de focus do search (::before, ::after, box-shadow, etc) */
+.ui-input--search:focus,
+.ui-input--search:focus-visible{
+  border: none ;
+  border-color: rgb(0, 174, 255);
+  outline: none ;
+  background: transparent ;
+  caret-color: rgba(255, 255, 255, 1) ; /* Cursor ainda mais visível quando focado */
+  filter: none ;
+  transition: none ;
+  transform: none ;
+  /* Desativa os efeitos de glow do ui-input */
+  --sm-btn-outline-opacity: 0 ;
+  --sm-btn-glow-opacity: 0 ;
+  box-shadow: none ;
+}
+
+/* Remove setinhas do input number (Windows/Chrome) */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield; /* Firefox */
+  appearance: textfield;
+}
+
+/* ================================
+   CUSTOM SELECT DROPDOWN - PREMIUM
+   ================================ */
+
+.custom-select-container {
+  position: relative;
+  width: 100%;
+}
+
+.custom-select-button {
+  width: 100%;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: all 180ms ease;
+}
+
+.custom-select-button:hover {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.15);
+  filter: brightness(1.03);
+}
+
+.custom-select-button:hover .custom-select-arrow {
+  opacity: 0.8;
+}
+
+.custom-select-arrow {
+  flex-shrink: 0;
+  color: white;
+  opacity: 0.5;
+  transition: all 180ms ease;
+}
+
+/* Dropdown Menu */
+.custom-select-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: rgba(17, 17, 17, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow: 
+    0 10px 40px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: fadeInDropdown 180ms ease-out;
+}
+
+@keyframes fadeInDropdown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Option Button */
+.custom-select-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 120ms ease;
+  outline: none;
+}
+
+.custom-select-option:hover {
+  background: rgba(0, 86, 185, 0.15);
+  color: white;
+}
+
+.custom-select-option.selected {
+  background: rgba(0, 86, 185, 0.25);
+  color: #00AEFF;
+  font-weight: 600;
+}
+
+.custom-select-option.selected:hover {
+  background: rgba(0, 86, 185, 0.35);
+}
+
+/* ================================
+   END CUSTOM SELECT
+   ================================ */
+
+/* Estilização do select (dropdown) - Glass Morphism */
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-color: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23ffffff' opacity='0.5' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 10px 6px;
+  padding-right: 40px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  transition: all 180ms ease;
+  box-shadow: none;
+  height: 38px;
+  display: flex;
+  align-items: center;
+}
+
+select:hover {
+  background-color: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.15);
+  filter: brightness(1.03);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23ffffff' opacity='0.7' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+}
+
+select:focus {
+  border-color: rgba(0, 86, 185, 0.6);
+  background-color: rgba(0, 0, 0, 0.4);
+  box-shadow: 
+    0 0 0 1px rgba(0, 86, 185, .65),
+    0 0 18px rgba(0, 86, 185, .38),
+    0 0 42px rgba(0, 86, 185, .30);
+  filter: brightness(1.06);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%230056B9' opacity='1' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+}
+
+select option {
+  background: #1a1a1a;
+  color: white;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+/* Remove os pseudo-elementos ::before e ::after do search */
+.ui-input--search::before,
+.ui-input--search::after{
+  display: none ;
+  opacity: 0 ;
+  content: none ;
+  animation: none ;
+}
+
+/* Garante que o search nunca tenha efeitos visuais ao focar */
+.ui-input.ui-input--search:focus,
+.ui-input.ui-input--search:focus-visible,
+input.ui-input--search:focus,
+input.ui-input--search:focus-visible{
+  border: none ;
+  border-color: transparent ;
+  outline: none ;
+  background: transparent ;
+  filter: none ;
+  transition: none ;
+  transform: none ;
+  --sm-btn-outline-opacity: 0 ;
+  --sm-btn-glow-opacity: 0 ;
+  box-shadow: none ;
+}
+
+/* Contorno interno no container do search quando o input está focado */
+.search-container:focus-within {
+  border-color: rgba(0, 195, 255, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(0, 86, 185, 0.4);
+}
+
+/* -----------------------------
+   Chips (start/stop) – keep neutral, can polish later
+------------------------------ */
+.ui-chip{
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.10);
+  transition: filter 180ms ease, transform 120ms ease;
+}
+.ui-chip:not(:disabled):hover{
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.ui-chip:not(:disabled):active{
+  transform: translateY(0px) scale(.99);
+}
+
+/* -----------------------------
+   Glass cards hook (base)
+------------------------------ */
+.sm-glass-card{
+  background: rgba(23,23,23,var(--sm-glass-alpha)) ;
+  backdrop-filter: blur(var(--sm-glass-blur)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--sm-glass-blur)) saturate(1.2);
+  border: 1px solid var(--sm-glass-border);
+  box-shadow: var(--sm-shadow-card);
+}
+
+/* Smaller glass card for process rows */
+.sm-glass-card-sm{
+  background: rgba(255,255,255,0.08) ;
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* -----------------------------
+   MAIN PANEL: internal neon glow (ONLY here)
+   This is the effect you want: glow passes INSIDE the black panel, not behind it.
+------------------------------ */
+.sm-main-panel{
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--sm-shadow-panel);
+  /* Background otimizado em WebP */
+  background-image: url('./assets/Img/backgroundapp.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #050505;
+}
+
+/* Animated glow layer - efeito orgânico tipo tintas */
+.sm-main-panel::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background: linear-gradient(-45deg, 
+    var(--sm-neon-c1), 
+    var(--sm-neon-c2), 
+    var(--sm-neon-c3), 
+    var(--sm-neon-c4),
+    var(--sm-neon-c1)
+  );
+  background-size: 400% 400%;
+  filter: blur(var(--sm-neon-blur));
+  opacity: var(--sm-neon-alpha);
+  animation: sm-neon-organic var(--sm-neon-speed) ease infinite;
+  z-index: 0;
+
+  /* Mask to make it stronger on edges, softer in the center */
+  -webkit-mask-image: radial-gradient(closest-side, transparent 35%, rgba(0,0,0,1) 75%);
+  mask-image: radial-gradient(closest-side, transparent 35%, rgba(0,0,0,1) 75%);
+}
+
+/* Dark wash to preserve contrast, but NOT killing the glow */
+.sm-main-panel::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background: rgba(5, 5, 5, 0.329);
+  z-index: 1;
+  pointer-events:none;
+}
+
+/* Keep panel content above neon layers */
+.sm-main-panel > *{
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes sm-neon-organic{
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* -----------------------------
+   Drag and Drop - Reordenação de lista
+   (inspirado no Angular CDK)
+------------------------------ */
+
+/* Container durante o drag */
+.cdk-drop-list-dragging .cdk-drag:not(.cdk-drag-placeholder) {
+  /* Todos os elementos se movem suavemente durante o drag */
+  transition: transform 350ms cubic-bezier(0.25, 0.8, 0.25, 1);
+  will-change: transform;
+}
+
+/* O elemento sendo arrastado (versão fantasma que segue o cursor) */
+.cdk-drag-preview {
+  box-sizing: border-box;
+  border-radius: 12px;
+  box-shadow: 
+    0 5px 5px -3px rgba(0, 0, 0, 0.2),
+    0 8px 10px 1px rgba(0, 0, 0, 0.14),
+    0 3px 14px 2px rgba(0, 0, 0, 0.12);
+  opacity: 0.9;
+  cursor: grabbing !important;
+  will-change: transform;
+  transition: none;
+}
+
+/* O placeholder (espaço vazio onde o elemento estava) */
+.cdk-drag-placeholder {
+  opacity: 0 !important;
+  /* Remove visual do placeholder - o movimento dos itens já indica a posição */
+  border: none !important;
+  background: transparent !important;
+  transition: all 350ms cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* Animação quando o elemento volta para a posição final após o drop */
+.cdk-drag-animating {
+  transition: transform 350ms cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* REMOVIDO: Feedback visual de drag-over - agora os itens se movem automaticamente */
+
+/* Estado do elemento durante o drag (antes de soltar) */
+.cdk-drag-dragging {
+  opacity: 0.5;
+}
+
+/* Cursor grabbing durante o drag */
+.cdk-drag:active {
+  cursor: grabbing;
+}
+
+
+/* ---------------------------------------------------------------------------
+   SPOTLIGHT EFFECT - Cards que acendem quando o mouse passa
+   - Baseado na referência do CodePen
+   - Usa variáveis CSS globais --x, --y, --xp, --yp do hook useGlowPointer
+   - Efeito de radial-gradient que segue o cursor
+   - Aplicado em cards com atributo [data-glow]
+--------------------------------------------------------------------------- */
+
+/* Variáveis do spotlight */
+:root {
+  --spotlight-size: 200px;        /* Tamanho do spotlight (aumentado) */
+  --spotlight-border-size: 2px;   /* Espessura da borda iluminada */
+  --spotlight-hue: 210;           /* Matiz base (azul/cyan) */
+  --spotlight-saturation: 100;    /* Saturação */
+  --spotlight-lightness: 70;      /* Luminosidade */
+  --spotlight-bg-opacity: 0.02;   /* Opacidade MUITO baixa no fundo (quase invisível) */
+  --spotlight-border-opacity: 0.8; /* Opacidade da borda (mais visível) */
+  --spotlight-shine-opacity: 0.6; /* Opacidade do brilho central (reduzida) */
+}
+
+/* Card com spotlight effect */
+[data-glow] {
+  --border-size: var(--spotlight-border-size);
+  --hue: calc(var(--spotlight-hue) + (var(--xp, 0) * 50)); /* Varia matiz com X */
+  position: relative;
+  background-size: calc(100% + (2 * var(--border-size))) calc(100% + (2 * var(--border-size)));
+  background-position: 50% 50%;
+  background-attachment: fixed;
+  
+  /* Gradiente radial DESATIVADO por padrão - sem "lanterna" */
+  background-image: none;
+}
+
+/* Ativa o spotlight SOMENTE quando o mouse está sobre o card */
+[data-glow]:hover {
+  background-image: radial-gradient(
+    var(--spotlight-size) var(--spotlight-size) at
+    calc(var(--x, 0) * 1px)
+    calc(var(--y, 0) * 1px),
+    hsl(var(--hue, 210) calc(var(--spotlight-saturation) * 1%) calc(var(--spotlight-lightness) * 1%) / var(--spotlight-bg-opacity)),
+    transparent
+  );
+}
+
+/* Correção específica para cards com overflow (lista de processos) */
+[data-glow].overflow-y-auto,
+[data-glow].overflow-x-hidden {
+  /* Remove o overflow que estava criando problemas */
+  overflow: visible !important;
+}
+
+/* Cria um wrapper interno para o scroll funcionar */
+[data-glow].overflow-y-auto > *,
+[data-glow].overflow-x-hidden > * {
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
+  position: relative;
+  z-index: 3;
+}
+
+/* Borda iluminada (pseudo-elemento ::before) */
+[data-glow]::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: calc(var(--border-size) * -1);
+  border: var(--border-size) solid transparent;
+  border-radius: inherit;
+  background-attachment: fixed;
+  background-size: calc(100% + (2 * var(--border-size))) calc(100% + (2 * var(--border-size)));
+  background-repeat: no-repeat;
+  background-position: 50% 50%;
+  
+  /* Gradiente DESATIVADO por padrão */
+  background-image: none;
+  
+  /* Mask para criar efeito de borda */
+  mask:
+    linear-gradient(transparent, transparent),
+    linear-gradient(white, white);
+  mask-clip: padding-box, border-box;
+  mask-composite: intersect;
+  
+  z-index: 2;
+  filter: brightness(2);
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+/* Ativa a borda iluminada SOMENTE quando hover */
+[data-glow]:hover::before {
+  opacity: 1;
+  background-image: radial-gradient(
+    calc(var(--spotlight-size) * 0.6) calc(var(--spotlight-size) * 0.6) at
+    calc(var(--x, 0) * 1px)
+    calc(var(--y, 0) * 1px),
+    hsl(var(--hue, 210) calc(var(--spotlight-saturation) * 1%) calc(var(--spotlight-lightness) * 1%) / var(--spotlight-border-opacity)),
+    transparent 100%
+  );
+}
+
+/* Brilho central (pseudo-elemento ::after) */
+[data-glow]::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: calc(var(--border-size) * -1);
+  border: var(--border-size) solid transparent;
+  border-radius: inherit;
+  background-attachment: fixed;
+  background-size: calc(100% + (2 * var(--border-size))) calc(100% + (2 * var(--border-size)));
+  background-repeat: no-repeat;
+  background-position: 50% 50%;
+  
+  /* Gradiente DESATIVADO por padrão */
+  background-image: none;
+  
+  /* Mask para criar efeito de borda */
+  mask:
+    linear-gradient(transparent, transparent),
+    linear-gradient(white, white);
+  mask-clip: padding-box, border-box;
+  mask-composite: intersect;
+  
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+/* Ativa o brilho central SOMENTE quando hover */
+[data-glow]:hover::after {
+  opacity: 1;
+  background-image: radial-gradient(
+    calc(var(--spotlight-size) * 0.35) calc(var(--spotlight-size) * 0.35) at
+    calc(var(--x, 0) * 1px)
+    calc(var(--y, 0) * 1px),
+    hsl(0 100% 100% / var(--spotlight-shine-opacity)),
+    transparent 100%
+  );
+}
+
+/* Animação de pontos piscando para loading */
+.loading-dots::after {
+  content: '.';
+  animation: loading-dots 1.5s infinite;
+  display: inline-block;
+  width: 20px;
+  text-align: left;
+}
+
+@keyframes loading-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+  100% { content: ''; }
+}

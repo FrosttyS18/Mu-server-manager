@@ -1,0 +1,10 @@
+{
+  "name": "win-window",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.js",
+  "gypfile": true,
+  "dependencies": {
+    "node-addon-api": "^8.5.0"
+  }
+}
