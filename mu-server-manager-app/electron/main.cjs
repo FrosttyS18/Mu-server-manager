@@ -902,6 +902,13 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:5173/");
     // Abre DevTools em desenvolvimento
     mainWindow.webContents.openDevTools();
+    
+    // Atalho para abrir/fechar DevTools: Ctrl+Shift+D
+    globalShortcut.register('CommandOrControl+Shift+D', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.toggleDevTools();
+      }
+    });
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
