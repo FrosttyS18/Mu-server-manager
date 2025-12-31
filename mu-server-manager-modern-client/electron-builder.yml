@@ -1,19 +1,27 @@
 appId: com.devfrostty.servermanager.modern
 productName: Server Manager Modern
 copyright: Copyright © 2026 Dev-Frostty
+disableSanityCheckAsar: true
 
 # Diretórios
 directories:
-  output: release-client
+  output: Admin
   buildResources: build
 
-# Arquivos a incluir no build
+# Arquivos a incluir no build (otimizado - apenas produção)
+# NOTA: Não especificar node_modules aqui faz o electron-builder incluir
+# automaticamente apenas as production dependencies (exclui devDependencies)
 files:
   - dist/**/*
   - electron/**/*
   - native/**/*.node
   - package.json
-  - node_modules/**/*
+  # Exclui arquivos desnecessários mesmo das production dependencies
+  - "!**/*.map"
+  - "!**/*.d.ts"
+  - "!**/{test,__tests__,tests,example,examples,demo,docs,doc}"
+  - "!**/{README.md,CHANGELOG.md,LICENSE,*.txt}"
+  - "!**/.{git,github,DS_Store}"
 
 # Arquivos a excluir do build (otimização)
 asarUnpack:
@@ -23,6 +31,9 @@ asarUnpack:
 win:
   target:
     - target: msi
+      arch:
+        - x64
+    - target: portable
       arch:
         - x64
   icon: build/icon.ico
@@ -45,8 +56,12 @@ msi:
   upgradeCode: "B4C7D8E9-F1A2-3B4C-5D6E-7F8A9B0C1D2E"
   warningsAsErrors: false
 
-# Compressão (store = sem compressão para addons nativos)
-compression: normal
+# Configurações do Portable
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+# Compressão (maximum = máxima compressão para reduzir tamanho)
+compression: maximum
 
 # Configurações de publicação (desabilitadas por padrão)
 publish: null

@@ -1,7 +1,7 @@
 import React from "react";
 import { Icon } from "./components/Icon";
 import logoSmf from "./assets/Icons/logo_smf.svg";
-import { useGlowPointer, useMetrics, useCrashDetection, LanguageContext, useTranslation } from "./hooks";
+import { useMetrics, useCrashDetection, LanguageContext, useTranslation } from "./hooks";
 import { ConfirmModal, CrashModal } from "./components/Modals";
 import { CustomSelect } from "./components/CustomSelect";
 import { getTranslation } from "./i18n/translations";
@@ -9,7 +9,7 @@ import { getTranslation } from "./i18n/translations";
 // FLAG DE VERSÃO: Define se é versão ADMIN ou versão de USUÁRIO
 // true = Versão Admin (auto-click ativo por padrão, opção visível)
 // false = Versão Usuário (auto-click oculto e desativado)
-const IS_ADMIN_VERSION = true;
+const IS_ADMIN_VERSION = true; // VERSÃO ADMIN - auto-click ativo
 
 // Tempo padrão (ms) para deixar o executável VISÍVEL após o start.
 // Isso dá tempo de clicar no modal "OK" (MUDEVS) antes do app ocultar a janela.
@@ -37,9 +37,6 @@ const PROCESSES = [
 ];
 
 export default function App() {
-  // Hook para spotlight effect
-  useGlowPointer();
-  
   const [processes, setProcesses] = React.useState([]);
   const [processesLoaded, setProcessesLoaded] = React.useState(false);
   const [isStartingAll, setIsStartingAll] = React.useState(false); // Loading state

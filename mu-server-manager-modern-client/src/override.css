@@ -21,7 +21,7 @@
 
   /* Glass controls */
   --sm-glass-alpha: .38;      /* card background opacity */
-  --sm-glass-blur: 54px;      /* card blur */
+  --sm-glass-blur: 24px;      /* card blur - REDUZIDO de 54px para melhor performance GPU */
   --sm-glass-border: rgba(255, 255, 255, 0.1);
 
   /* Shadows (keep as variables so you can increase later) */
@@ -29,9 +29,9 @@
   --sm-shadow-card: none;
 
   /* Painel PRETO NEON (main panel only) */
-  --sm-neon-alpha: .65;       /* intensity - reduzida para mesclar melhor */
-  --sm-neon-blur: 180px;      /* softness */
-  --sm-neon-speed: 12s;       /* animation speed - mais lento e suave */
+  --sm-neon-alpha: .45;       /* intensity - REDUZIDA de .65 para melhor performance */
+  --sm-neon-blur: 120px;      /* softness - REDUZIDO de 180px para melhor performance GPU */
+  --sm-neon-speed: 16s;       /* animation speed - MAIS LENTO (16s vs 12s) para reduzir GPU */
   --sm-neon-c1: rgb(0, 140, 160);      /* Aqua escuro */
   --sm-neon-c2: rgb(0, 100, 150);      /* Azul escuro */
   --sm-neon-c3: rgb(10, 10, 20);       /* Quase preto */
@@ -54,6 +54,9 @@
   backdrop-filter: blur(var(--sm-glass-blur)) saturate(1.2);
   -webkit-backdrop-filter: blur(var(--sm-glass-blur)) saturate(1.2);
   border-right: 1px solid var(--sm-glass-border);
+  /* Otimização GPU: força aceleração de hardware */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 /* -----------------------------
@@ -103,10 +106,10 @@
   transition: transform 200ms cubic-bezier(.2,.8,.2,1), filter 180ms ease, border-color 180ms ease;
   /* tunables (you can tweak if needed) */
   --sm-btn-border: 2px;          /* outline thickness */
-  --sm-btn-glow-blur: 80px;      /* glow softness */
+  --sm-btn-glow-blur: 40px;      /* glow softness - REDUZIDO de 80px para melhor performance GPU */
   --sm-btn-glow-opacity: 0;      /* default off */
   --sm-btn-outline-opacity: 0;   /* default off */
-  --sm-btn-walk-ms: 2600ms;      /* walking speed */
+  --sm-btn-walk-ms: 3200ms;      /* walking speed - MAIS LENTO (3200ms vs 2600ms) para reduzir GPU */
 }
 
 /* keep the content above */
@@ -140,6 +143,9 @@
   box-shadow: none;
   overflow: visible;
   transition: all 180ms ease;
+  /* Otimização GPU: força aceleração de hardware */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 /* Conteúdo acima */
@@ -244,6 +250,9 @@
 .ui-btn:not(:disabled):focus-visible::before,
 .ui-btn:not(:disabled):focus-visible::after{
   animation: smBtnWalk var(--sm-btn-walk-ms) linear infinite;
+  /* Otimização GPU: força aceleração de hardware */
+  will-change: background-position;
+  transform: translateZ(0); /* Força layer de composição GPU */
 }
 
 @keyframes smBtnWalk{
@@ -332,10 +341,10 @@
   transition: border-color 180ms ease, filter 180ms ease, box-shadow 180ms ease;
   /* tunables (mesmos valores dos botões) */
   --sm-btn-border: 2px;
-  --sm-btn-glow-blur: 80px;
+  --sm-btn-glow-blur: 40px;      /* glow softness - REDUZIDO de 80px para melhor performance GPU */
   --sm-btn-glow-opacity: 0;
   --sm-btn-outline-opacity: 0;
-  --sm-btn-walk-ms: 2600ms;
+  --sm-btn-walk-ms: 3200ms;      /* walking speed - MAIS LENTO (3200ms vs 2600ms) para reduzir GPU */
 }
 
 /* keep the content above */
@@ -412,6 +421,9 @@
 .ui-input:focus-visible::before,
 .ui-input:focus-visible::after{
   animation: smBtnWalk var(--sm-btn-walk-ms) linear infinite;
+  /* Otimização GPU: força aceleração de hardware */
+  will-change: background-position;
+  transform: translateZ(0); /* Força layer de composição GPU */
 }
 
 /* Remove focus ring just for search (as you liked) */
@@ -481,6 +493,9 @@ input[type="number"] {
   cursor: pointer;
   outline: none;
   transition: all 180ms ease;
+  /* Otimização GPU: força aceleração de hardware */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .custom-select-button:hover {
@@ -517,6 +532,9 @@ input[type="number"] {
     0 10px 40px rgba(0, 0, 0, 0.6),
     0 0 0 1px rgba(255, 255, 255, 0.05);
   animation: fadeInDropdown 180ms ease-out;
+  /* Otimização GPU: força aceleração de hardware */
+  transform: translateZ(0);
+  will-change: transform, opacity;
 }
 
 @keyframes fadeInDropdown {
@@ -592,6 +610,9 @@ select {
   height: 38px;
   display: flex;
   align-items: center;
+  /* Otimização GPU: força aceleração de hardware */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 select:hover {
@@ -676,6 +697,9 @@ input.ui-input--search:focus-visible{
   -webkit-backdrop-filter: blur(var(--sm-glass-blur)) saturate(1.2);
   border: 1px solid var(--sm-glass-border);
   box-shadow: var(--sm-shadow-card);
+  /* Otimização GPU: força aceleração de hardware */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 /* Smaller glass card for process rows */
@@ -684,6 +708,9 @@ input.ui-input--search:focus-visible{
   backdrop-filter: blur(8px) saturate(1.2);
   -webkit-backdrop-filter: blur(8px) saturate(1.2);
   border: 1px solid rgba(255,255,255,0.1);
+  /* Otimização GPU: força aceleração de hardware */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 /* -----------------------------
@@ -719,6 +746,9 @@ input.ui-input--search:focus-visible{
   opacity: var(--sm-neon-alpha);
   animation: sm-neon-organic var(--sm-neon-speed) ease infinite;
   z-index: 0;
+  /* Otimização GPU: força aceleração de hardware */
+  will-change: background-position;
+  transform: translateZ(0); /* Força layer de composição GPU */
 
   /* Mask to make it stronger on edges, softer in the center */
   -webkit-mask-image: radial-gradient(closest-side, transparent 35%, rgba(0,0,0,1) 75%);
@@ -750,6 +780,30 @@ input.ui-input--search:focus-visible{
   }
   100% {
     background-position: 0% 50%;
+  }
+}
+
+/* Desabilita animações para usuários que preferem reduzir movimento */
+@media (prefers-reduced-motion: reduce) {
+  .sm-main-panel::before {
+    animation: none;
+  }
+  
+  .sm-sidebar-btn::before,
+  .sm-sidebar-btn::after,
+  .ui-btn::before,
+  .ui-btn::after {
+    animation: none;
+  }
+  
+  .animate-spin-slow {
+    animation: none;
+  }
+  
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -805,148 +859,6 @@ input.ui-input--search:focus-visible{
   cursor: grabbing;
 }
 
-
-/* ---------------------------------------------------------------------------
-   SPOTLIGHT EFFECT - Cards que acendem quando o mouse passa
-   - Baseado na referência do CodePen
-   - Usa variáveis CSS globais --x, --y, --xp, --yp do hook useGlowPointer
-   - Efeito de radial-gradient que segue o cursor
-   - Aplicado em cards com atributo [data-glow]
---------------------------------------------------------------------------- */
-
-/* Variáveis do spotlight */
-:root {
-  --spotlight-size: 200px;        /* Tamanho do spotlight (aumentado) */
-  --spotlight-border-size: 2px;   /* Espessura da borda iluminada */
-  --spotlight-hue: 210;           /* Matiz base (azul/cyan) */
-  --spotlight-saturation: 100;    /* Saturação */
-  --spotlight-lightness: 70;      /* Luminosidade */
-  --spotlight-bg-opacity: 0.02;   /* Opacidade MUITO baixa no fundo (quase invisível) */
-  --spotlight-border-opacity: 0.8; /* Opacidade da borda (mais visível) */
-  --spotlight-shine-opacity: 0.6; /* Opacidade do brilho central (reduzida) */
-}
-
-/* Card com spotlight effect */
-[data-glow] {
-  --border-size: var(--spotlight-border-size);
-  --hue: calc(var(--spotlight-hue) + (var(--xp, 0) * 50)); /* Varia matiz com X */
-  position: relative;
-  background-size: calc(100% + (2 * var(--border-size))) calc(100% + (2 * var(--border-size)));
-  background-position: 50% 50%;
-  background-attachment: fixed;
-  
-  /* Gradiente radial DESATIVADO por padrão - sem "lanterna" */
-  background-image: none;
-}
-
-/* Ativa o spotlight SOMENTE quando o mouse está sobre o card */
-[data-glow]:hover {
-  background-image: radial-gradient(
-    var(--spotlight-size) var(--spotlight-size) at
-    calc(var(--x, 0) * 1px)
-    calc(var(--y, 0) * 1px),
-    hsl(var(--hue, 210) calc(var(--spotlight-saturation) * 1%) calc(var(--spotlight-lightness) * 1%) / var(--spotlight-bg-opacity)),
-    transparent
-  );
-}
-
-/* Correção específica para cards com overflow (lista de processos) */
-[data-glow].overflow-y-auto,
-[data-glow].overflow-x-hidden {
-  /* Remove o overflow que estava criando problemas */
-  overflow: visible !important;
-}
-
-/* Cria um wrapper interno para o scroll funcionar */
-[data-glow].overflow-y-auto > *,
-[data-glow].overflow-x-hidden > * {
-  overflow-y: auto;
-  overflow-x: hidden;
-  height: 100%;
-  position: relative;
-  z-index: 3;
-}
-
-/* Borda iluminada (pseudo-elemento ::before) */
-[data-glow]::before {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: calc(var(--border-size) * -1);
-  border: var(--border-size) solid transparent;
-  border-radius: inherit;
-  background-attachment: fixed;
-  background-size: calc(100% + (2 * var(--border-size))) calc(100% + (2 * var(--border-size)));
-  background-repeat: no-repeat;
-  background-position: 50% 50%;
-  
-  /* Gradiente DESATIVADO por padrão */
-  background-image: none;
-  
-  /* Mask para criar efeito de borda */
-  mask:
-    linear-gradient(transparent, transparent),
-    linear-gradient(white, white);
-  mask-clip: padding-box, border-box;
-  mask-composite: intersect;
-  
-  z-index: 2;
-  filter: brightness(2);
-  opacity: 0;
-  transition: opacity 200ms ease-out;
-}
-
-/* Ativa a borda iluminada SOMENTE quando hover */
-[data-glow]:hover::before {
-  opacity: 1;
-  background-image: radial-gradient(
-    calc(var(--spotlight-size) * 0.6) calc(var(--spotlight-size) * 0.6) at
-    calc(var(--x, 0) * 1px)
-    calc(var(--y, 0) * 1px),
-    hsl(var(--hue, 210) calc(var(--spotlight-saturation) * 1%) calc(var(--spotlight-lightness) * 1%) / var(--spotlight-border-opacity)),
-    transparent 100%
-  );
-}
-
-/* Brilho central (pseudo-elemento ::after) */
-[data-glow]::after {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: calc(var(--border-size) * -1);
-  border: var(--border-size) solid transparent;
-  border-radius: inherit;
-  background-attachment: fixed;
-  background-size: calc(100% + (2 * var(--border-size))) calc(100% + (2 * var(--border-size)));
-  background-repeat: no-repeat;
-  background-position: 50% 50%;
-  
-  /* Gradiente DESATIVADO por padrão */
-  background-image: none;
-  
-  /* Mask para criar efeito de borda */
-  mask:
-    linear-gradient(transparent, transparent),
-    linear-gradient(white, white);
-  mask-clip: padding-box, border-box;
-  mask-composite: intersect;
-  
-  z-index: 2;
-  opacity: 0;
-  transition: opacity 200ms ease-out;
-}
-
-/* Ativa o brilho central SOMENTE quando hover */
-[data-glow]:hover::after {
-  opacity: 1;
-  background-image: radial-gradient(
-    calc(var(--spotlight-size) * 0.35) calc(var(--spotlight-size) * 0.35) at
-    calc(var(--x, 0) * 1px)
-    calc(var(--y, 0) * 1px),
-    hsl(0 100% 100% / var(--spotlight-shine-opacity)),
-    transparent 100%
-  );
-}
 
 /* Animação de pontos piscando para loading */
 .loading-dots::after {
