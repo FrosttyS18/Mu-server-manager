@@ -1,0 +1,6 @@
+{
+  "name": "hello-addon",
+  "version": "1.0.0",
+  "main": "index.js",
+  "gypfile": true
+}

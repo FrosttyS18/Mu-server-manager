@@ -1,6 +1,7 @@
 import React from "react";
 import { Icon } from "./components/Icon";
 import logoSmf from "./assets/Icons/logo_smf.svg";
+import logoMuDevs from "./assets/Icons/logomudevs.webp";
 import { useMetrics, useCrashDetection, LanguageContext, useTranslation } from "./hooks";
 import { ConfirmModal, CrashModal } from "./components/Modals";
 import { CustomSelect } from "./components/CustomSelect";
@@ -1689,7 +1690,14 @@ setProcesses(() => {
               </div>
               </div>
 
-              <div className="col-start-2 row-start-1 flex items-start justify-end">
+              <div className="col-start-2 row-start-1 flex items-center justify-end gap-3">
+                <img
+                  src={logoMuDevs}
+                  alt="MuDevs"
+                  className="h-[56px] w-auto select-none"
+                  draggable={false}
+                />
+                <span className="text-white/60 text-[20px] font-light select-none">+</span>
                 <img
                   src={logoSmf}
                   alt="Server Manager"

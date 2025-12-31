@@ -900,8 +900,6 @@ function createWindow() {
   
   if (isDev) {
     mainWindow.loadURL("http://localhost:5173/");
-    // Abre DevTools em desenvolvimento
-    mainWindow.webContents.openDevTools();
     
     // Atalho para abrir/fechar DevTools: Ctrl+Shift+D
     globalShortcut.register('CommandOrControl+Shift+D', () => {
