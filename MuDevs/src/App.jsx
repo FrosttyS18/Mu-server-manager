@@ -10,7 +10,7 @@ import { getTranslation } from "./i18n/translations";
 // FLAG DE VERSÃO: Define se é versão ADMIN ou versão de USUÁRIO
 // true = Versão Admin (auto-click ativo por padrão, opção visível)
 // false = Versão Usuário (auto-click oculto e desativado)
-const IS_ADMIN_VERSION = true; // VERSÃO ADMIN - auto-click ativo
+const IS_ADMIN_VERSION = false; // VERSÃO CLIENTE - auto-click desativado
 
 // Tempo padrão (ms) para deixar o executável VISÍVEL após o start.
 // Isso dá tempo de clicar no modal "OK" (MUDEVS) antes do app ocultar a janela.
@@ -45,7 +45,7 @@ export default function App() {
   
   // Settings States
   const [language, setLanguage] = React.useState('pt-BR'); // 'pt-BR', 'en-US', 'es-ES'
-  const [autoOKDialogs, setAutoOKDialogs] = React.useState(IS_ADMIN_VERSION); // Auto-click OK em diálogos MUDevs (true para Admin, false para Usuário)
+  const [autoOKDialogs, setAutoOKDialogs] = React.useState(false); // Auto-click OK desativado para versão cliente
   
   // Função de tradução usando o state diretamente (não usa Context pois o App é quem cria o Provider)
   const t = React.useCallback((key, params = {}) => {

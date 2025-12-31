@@ -820,8 +820,6 @@ input.ui-input--search:focus-visible{
   display: inline-block;
   width: 20px;
   text-align: left;
-  /* Otimização: will-change apenas quando animando */
-  will-change: contents;
 }
 
 @keyframes loading-dots {
