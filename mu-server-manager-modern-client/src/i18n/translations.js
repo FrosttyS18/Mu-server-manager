@@ -26,8 +26,22 @@ export const translations = {
     // Header / Main
     header: {
       processes: 'Processos',
+      executables: 'Executáveis',
       settings: 'Configurações',
       search: 'Procurar Processos...',
+    },
+
+    tabs: {
+      serverName: 'Servidor',
+      newTab: 'Nova aba',
+      limitReached: 'Limite de abas atingido (máx. {max}).',
+    },
+
+    emptyState: {
+      noProcessesTitle: 'Nenhum Processo Adicionado',
+      noProcessesHintBefore: 'Clique no botão ',
+      noProcessesHintAfter: ' acima para configurar seu primeiro executável.',
+      noResults: 'Nenhum Processo Encontrado.',
     },
 
     // Process Actions
@@ -127,6 +141,22 @@ export const translations = {
       cancel: 'Cancelar',
       yes: 'Sim',
       no: 'Não',
+      stopAllTitle: 'Parar Todos os Processos?',
+      stopAllMessage: 'Você está prestes a parar {count} processo(s) em execução. Esta ação não pode ser desfeita.',
+      stopAllConfirm: 'Sim, Parar Todos',
+      restartAllTitle: 'Reiniciar Todos os Processos?',
+      restartAllMessage: 'Você está prestes a reiniciar {count} processo(s). Todos os processos serão parados e reiniciados.',
+      restartAllConfirm: 'Sim, Reiniciar Todos',
+      removeCheckedTitle: 'Remover processos',
+      removeCheckedMessage: 'Remover {count} processo(s) marcado(s)?',
+      removeCheckedConfirm: 'Remover',
+      clearAllTitle: 'Limpar lista',
+      clearAllMessage: 'Limpar todos os processos da lista?',
+      clearAllConfirm: 'Limpar',
+      closeTabTitle: 'Fechar aba',
+      closeTabMessageRunning: 'Esta aba tem {count} processo(s) rodando. Se você fechar, eles continuarão em execução, mas sairão da sua lista.',
+      closeTabMessageHasProcesses: 'Esta aba tem {count} processo(s). Fechar a aba remove a lista desta aba.',
+      closeTabMessageEmpty: 'Fechar a aba "{name}"?',
     },
 
     // Console Modal
@@ -302,6 +332,7 @@ export const translations = {
       remove: 'Remover',
       edit: 'Editar',
       properties: 'Propriedades',
+      process: 'Processo',
     },
 
     // Dialogs
@@ -339,6 +370,8 @@ export const translations = {
       processRemoved: 'Processo removido',
       processesRemoved: 'processos removidos',
       allCleared: 'Lista limpa',
+      removed_count: 'Removidos {count} processo(s).',
+      cleared_count: 'Lista limpa ({count} itens).',
     },
 
     // Common
@@ -391,8 +424,22 @@ export const translations = {
     // Header / Main
     header: {
       processes: 'Processes',
+      executables: 'Executables',
       settings: 'Settings',
       search: 'Search Processes...',
+    },
+
+    tabs: {
+      serverName: 'Server',
+      newTab: 'New tab',
+      limitReached: 'Tab limit reached (max {max}).',
+    },
+
+    emptyState: {
+      noProcessesTitle: 'No Processes Added',
+      noProcessesHintBefore: 'Click the ',
+      noProcessesHintAfter: ' button above to set up your first executable.',
+      noResults: 'No Processes Found.',
     },
 
     // Process Actions
@@ -492,6 +539,22 @@ export const translations = {
       cancel: 'Cancel',
       yes: 'Yes',
       no: 'No',
+      stopAllTitle: 'Stop All Processes?',
+      stopAllMessage: 'You are about to stop {count} running process(es). This action cannot be undone.',
+      stopAllConfirm: 'Yes, Stop All',
+      restartAllTitle: 'Restart All Processes?',
+      restartAllMessage: 'You are about to restart {count} process(es). All processes will be stopped and restarted.',
+      restartAllConfirm: 'Yes, Restart All',
+      removeCheckedTitle: 'Remove processes',
+      removeCheckedMessage: 'Remove {count} checked process(es)?',
+      removeCheckedConfirm: 'Remove',
+      clearAllTitle: 'Clear list',
+      clearAllMessage: 'Clear all processes from the list?',
+      clearAllConfirm: 'Clear',
+      closeTabTitle: 'Close tab',
+      closeTabMessageRunning: 'This tab has {count} running process(es). If you close it, they will keep running, but will be removed from your list.',
+      closeTabMessageHasProcesses: 'This tab has {count} process(es). Closing the tab removes its list.',
+      closeTabMessageEmpty: 'Close the tab "{name}"?',
     },
 
     // Console Modal
@@ -667,6 +730,7 @@ export const translations = {
       remove: 'Remove',
       edit: 'Edit',
       properties: 'Properties',
+      process: 'Process',
     },
 
     // Dialogs
@@ -704,6 +768,8 @@ export const translations = {
       processRemoved: 'Process removed',
       processesRemoved: 'processes removed',
       allCleared: 'List cleared',
+      removed_count: 'Removed {count} process(es).',
+      cleared_count: 'List cleared ({count} items).',
     },
 
     // Common
@@ -756,8 +822,22 @@ export const translations = {
     // Header / Main
     header: {
       processes: 'Procesos',
+      executables: 'Ejecutables',
       settings: 'Configuración',
       search: 'Buscar Procesos...',
+    },
+
+    tabs: {
+      serverName: 'Servidor',
+      newTab: 'Nueva pestaña',
+      limitReached: 'Límite de pestañas alcanzado (máx. {max}).',
+    },
+
+    emptyState: {
+      noProcessesTitle: 'Ningún Proceso Agregado',
+      noProcessesHintBefore: 'Haga clic en el botón ',
+      noProcessesHintAfter: ' arriba para configurar su primer ejecutable.',
+      noResults: 'No se encontraron procesos.',
     },
 
     // Process Actions
@@ -857,6 +937,22 @@ export const translations = {
       cancel: 'Cancelar',
       yes: 'Sí',
       no: 'No',
+      stopAllTitle: '¿Detener Todos los Procesos?',
+      stopAllMessage: 'Está a punto de detener {count} proceso(s) en ejecución. Esta acción no se puede deshacer.',
+      stopAllConfirm: 'Sí, Detener Todos',
+      restartAllTitle: '¿Reiniciar Todos los Procesos?',
+      restartAllMessage: 'Está a punto de reiniciar {count} proceso(s). Todos los procesos serán detenidos y reiniciados.',
+      restartAllConfirm: 'Sí, Reiniciar Todos',
+      removeCheckedTitle: 'Eliminar procesos',
+      removeCheckedMessage: '¿Eliminar {count} proceso(s) marcado(s)?',
+      removeCheckedConfirm: 'Eliminar',
+      clearAllTitle: 'Limpiar lista',
+      clearAllMessage: '¿Limpiar todos los procesos de la lista?',
+      clearAllConfirm: 'Limpiar',
+      closeTabTitle: 'Cerrar pestaña',
+      closeTabMessageRunning: 'Esta pestaña tiene {count} proceso(s) en ejecución. Si la cierra, seguirán ejecutándose, pero se quitarán de su lista.',
+      closeTabMessageHasProcesses: 'Esta pestaña tiene {count} proceso(s). Cerrar la pestaña elimina su lista.',
+      closeTabMessageEmpty: '¿Cerrar la pestaña "{name}"?',
     },
 
     // Console Modal
@@ -1032,6 +1128,7 @@ export const translations = {
       remove: 'Eliminar',
       edit: 'Editar',
       properties: 'Propiedades',
+      process: 'Proceso',
     },
 
     // Dialogs
@@ -1069,6 +1166,8 @@ export const translations = {
       processRemoved: 'Proceso eliminado',
       processesRemoved: 'procesos eliminados',
       allCleared: 'Lista limpiada',
+      removed_count: 'Eliminados {count} proceso(s).',
+      cleared_count: 'Lista limpiada ({count} elementos).',
     },
 
     // Common

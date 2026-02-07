@@ -1086,17 +1086,60 @@ ipcMain.handle("load-processes", async () => {
   // null = arquivo não existe (nunca foi salvo)
   if (data === null) return null;
 
-  // se existe mas está inválido, devolve lista vazia
-  const list = Array.isArray(data) ? data : [];
+  if (Array.isArray(data)) {
+    return applyDelayOverrides(data);
+  }
 
-  // aplica overrides de delay via XML (editável pelo usuário)
-  return applyDelayOverrides(list);
+  if (data && typeof data === 'object' && Array.isArray(data.tabs)) {
+    const nextTabs = data.tabs.map((t) => ({
+      id: t?.id,
+      name: t?.name,
+      processes: applyDelayOverrides(Array.isArray(t?.processes) ? t.processes : []),
+    }));
+
+    return {
+      version: 2,
+      activeTabId: data.activeTabId,
+      tabs: nextTabs,
+    };
+  }
+
+  return [];
 });
 
 ipcMain.handle("save-processes", async (_evt, list) => {
   const file = dataFile();
-  const safe = Array.isArray(list) ? list : [];
-  writeJsonSafe(file, safe);
+
+  if (Array.isArray(list)) {
+    writeJsonSafe(file, list);
+    return true;
+  }
+
+  if (list && typeof list === 'object' && Array.isArray(list.tabs)) {
+    const cleanProcessList = (l) => (Array.isArray(l) ? l : []).map((p) => ({
+      id: p?.id,
+      name: p?.name,
+      path: p?.path,
+      delayMs: p?.delayMs,
+      args: p?.args ?? "",
+      run: p?.run ?? true,
+    }));
+
+    const cleanTabs = list.tabs.map((t) => ({
+      id: t?.id,
+      name: t?.name,
+      processes: cleanProcessList(t?.processes),
+    }));
+
+    writeJsonSafe(file, {
+      version: 2,
+      activeTabId: list.activeTabId,
+      tabs: cleanTabs,
+    });
+    return true;
+  }
+
+  writeJsonSafe(file, []);
   return true;
 });
 
@@ -1423,7 +1466,7 @@ async function killAllManagedWithVerification() {
   const stillRunning = pidsToKill.filter(p => isProcessRunning(p.pid));
   
   if (stillRunning.length > 0) {
-    console.warn(`[Cleanup] ⚠️ ${stillRunning.length} processo(s) ainda rodando após timeout:`);
+    console.warn(`[Cleanup] WARNING: ${stillRunning.length} processo(s) ainda rodando apos timeout:`);
     stillRunning.forEach(p => console.warn(`  - PID ${p.pid} (${p.name})`));
     
     // Força kill agressivo nos que sobraram
@@ -1434,7 +1477,7 @@ async function killAllManagedWithVerification() {
       } catch {}
     }
   } else {
-    console.log(`[Cleanup] ✅ Todos os ${pidsToKill.length} processos foram finalizados com sucesso`);
+    console.log(`[Cleanup] OK: Todos os ${pidsToKill.length} processos foram finalizados com sucesso`);
   }
   
   running.clear();
@@ -1454,9 +1497,9 @@ async function cleanupOnExit() {
   const cleanupStartTime = Date.now();
   const CLEANUP_MAX_TIME_MS = 10000; // 10 segundos máximo para cleanup total
   
-  console.log('═══════════════════════════════════════════════════');
-  console.log('[Cleanup] 🧹 INICIANDO LIMPEZA DE RECURSOS...');
-  console.log('═══════════════════════════════════════════════════');
+  console.log('===================================================');
+  console.log('[Cleanup] INICIANDO LIMPEZA DE RECURSOS...');
+  console.log('===================================================');
   
   try {
     // 1. Para os intervalos PRIMEIRO (antes de matar processos)
@@ -1464,13 +1507,13 @@ async function cleanupOnExit() {
     if (metricsInterval) {
       clearInterval(metricsInterval);
       metricsInterval = null;
-      console.log('  ✅ Metrics interval limpo');
+      console.log('  OK: Metrics interval limpo');
     }
     
     if (processWatchdogInterval) {
       clearInterval(processWatchdogInterval);
       processWatchdogInterval = null;
-      console.log('  ✅ Watchdog interval limpo');
+      console.log('  OK: Watchdog interval limpo');
     }
     
     // 2. Mata todos os processos gerenciados COM VERIFICAÇÃO
@@ -1478,15 +1521,15 @@ async function cleanupOnExit() {
     const allKilled = await Promise.race([
       killAllManagedWithVerification(),
       new Promise((resolve) => setTimeout(() => {
-        console.warn('[Cleanup] ⚠️ Timeout ao matar processos!');
+        console.warn('[Cleanup] WARNING: Timeout ao matar processos!');
         resolve(false);
       }, 7000))
     ]);
     
     if (allKilled) {
-      console.log('  ✅ Todos processos finalizados com sucesso');
+      console.log('  OK: Todos processos finalizados com sucesso');
     } else {
-      console.warn('  ⚠️ Alguns processos podem não ter finalizado');
+      console.warn('  WARNING: Alguns processos podem nao ter finalizado');
     }
     
     // 3. Fecha conexões SQL (com timeout)
@@ -1501,13 +1544,13 @@ async function cleanupOnExit() {
           })(),
           new Promise((resolve) => setTimeout(resolve, 2000)) // 2s timeout
         ]);
-        console.log('  ✅ SQL Server pool fechado');
+        console.log('  OK: SQL Server pool fechado');
       } catch (err) {
-        console.warn(`  ⚠️ Erro ao fechar SQL Server pool: ${err.message}`);
+        console.warn(`  WARNING: Erro ao fechar SQL Server pool: ${err.message}`);
       }
       sqlPool = null;
     } else {
-      console.log('  ℹ️ Sem conexão SQL ativa');
+      console.log('  INFO: Sem conexao SQL ativa');
     }
     
     // 4. Fecha MySQL (com timeout)
@@ -1518,22 +1561,22 @@ async function cleanupOnExit() {
           mysqlConnection.end(),
           new Promise((resolve) => setTimeout(resolve, 2000)) // 2s timeout
         ]);
-        console.log('  ✅ MySQL connection fechada');
+        console.log('  OK: MySQL connection fechada');
       } catch (err) {
-        console.warn(`  ⚠️ Erro ao fechar MySQL connection: ${err.message}`);
+        console.warn(`  WARNING: Erro ao fechar MySQL connection: ${err.message}`);
       }
       mysqlConnection = null;
     } else {
-      console.log('  ℹ️ Sem conexão MySQL ativa');
+      console.log('  INFO: Sem conexao MySQL ativa');
     }
     
     // 5. Remove atalhos globais
     console.log('[Cleanup] Passo 5/6: Removendo atalhos globais...');
     try {
       globalShortcut.unregisterAll();
-      console.log('  ✅ Atalhos globais removidos');
+      console.log('  OK: Atalhos globais removidos');
     } catch (err) {
-      console.warn(`  ⚠️ Erro ao remover atalhos globais: ${err.message}`);
+      console.warn(`  WARNING: Erro ao remover atalhos globais: ${err.message}`);
     }
     
     // 6. Fecha e destrói as janelas
@@ -1543,9 +1586,9 @@ async function cleanupOnExit() {
         splashWindow.removeAllListeners();
         splashWindow.destroy();
         splashWindow = null;
-        console.log('  ✅ Splash window destruída');
+        console.log('  OK: Splash window destruida');
       } catch (err) {
-        console.warn(`  ⚠️ Erro ao destruir splash window: ${err.message}`);
+        console.warn(`  WARNING: Erro ao destruir splash window: ${err.message}`);
         splashWindow = null;
       }
     }
@@ -1555,26 +1598,26 @@ async function cleanupOnExit() {
         mainWindow.removeAllListeners();
         mainWindow.destroy();
         mainWindow = null;
-        console.log('  ✅ Main window destruída');
+        console.log('  OK: Main window destruida');
       } catch (err) {
-        console.warn(`  ⚠️ Erro ao destruir main window: ${err.message}`);
+        console.warn(`  WARNING: Erro ao destruir main window: ${err.message}`);
         mainWindow = null;
       }
     }
     
     const cleanupDuration = Date.now() - cleanupStartTime;
-    console.log('═══════════════════════════════════════════════════');
-    console.log(`[Cleanup] ✅ LIMPEZA CONCLUÍDA em ${cleanupDuration}ms`);
-    console.log('═══════════════════════════════════════════════════');
+    console.log('===================================================');
+    console.log(`[Cleanup] OK: LIMPEZA CONCLUIDA em ${cleanupDuration}ms`);
+    console.log('===================================================');
     
   } catch (error) {
-    console.error('[Cleanup] ❌ ERRO CRÍTICO durante cleanup:', error);
+    console.error('[Cleanup] ERROR: ERRO CRITICO durante cleanup:', error);
   }
   
   // Garante que cleanup sempre finaliza, mesmo com erro
   const totalTime = Date.now() - cleanupStartTime;
   if (totalTime > CLEANUP_MAX_TIME_MS) {
-    console.warn(`[Cleanup] ⚠️ Cleanup demorou ${totalTime}ms (limite: ${CLEANUP_MAX_TIME_MS}ms)`);
+    console.warn(`[Cleanup] WARNING: Cleanup demorou ${totalTime}ms (limite: ${CLEANUP_MAX_TIME_MS}ms)`);
   }
 }
 

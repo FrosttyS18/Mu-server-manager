@@ -39,7 +39,11 @@ const PROCESSES = [
 ];
 
 export default function App() {
-  const [processes, setProcesses] = React.useState([]);
+  const [tabs, setTabs] = React.useState([]);
+  const [activeTabId, setActiveTabId] = React.useState(null);
+  const [editingTabId, setEditingTabId] = React.useState(null);
+  const [tabNameDraft, setTabNameDraft] = React.useState("");
+  const tabNameInputRef = React.useRef(null);
   const [processesLoaded, setProcessesLoaded] = React.useState(false);
   const [isStartingAll, setIsStartingAll] = React.useState(false); // Loading state
   const [isRestartingAll, setIsRestartingAll] = React.useState(false); // Loading state
@@ -50,19 +54,66 @@ export default function App() {
   
   // Função de tradução usando o state diretamente (não usa Context pois o App é quem cria o Provider)
   const t = React.useCallback((key, params = {}) => {
-    return getTranslation(language, key, params);
+    let text = getTranslation(language, key);
+    if (params && typeof text === 'string') {
+      Object.keys(params).forEach((param) => {
+        text = text.replace(`{${param}}`, params[param]);
+      });
+    }
+    return text;
   }, [language]);
 
   const tRef = React.useRef(t);
   React.useEffect(() => {
     tRef.current = t;
   }, [t]);
+
+  const tabsRef = React.useRef(tabs);
+  React.useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
+
+  const activeTabIdRef = React.useRef(activeTabId);
+  React.useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
+  React.useEffect(() => {
+    if (!editingTabId) return;
+    tabNameInputRef.current?.focus();
+  }, [editingTabId]);
+
+  const activeTab = React.useMemo(() => {
+    if (!Array.isArray(tabs) || tabs.length === 0) return null;
+    const byId = tabs.find((t) => t.id === activeTabId);
+    return byId || tabs[0];
+  }, [tabs, activeTabId]);
+
+  const processes = React.useMemo(() => activeTab?.processes ?? [], [activeTab]);
+
+  const setProcesses = React.useCallback((updater) => {
+    setTabs((prevTabs) => {
+      const id = activeTabIdRef.current;
+      if (!id) return prevTabs;
+
+      return (Array.isArray(prevTabs) ? prevTabs : []).map((tab) => {
+        if (tab.id !== id) return tab;
+        const prevList = Array.isArray(tab.processes) ? tab.processes : [];
+        const nextList = typeof updater === "function" ? updater(prevList) : updater;
+        return { ...tab, processes: Array.isArray(nextList) ? nextList : prevList };
+      });
+    });
+  }, []);
   
   // REF para sempre ter acesso aos processos atuais
   const processesRef = React.useRef(processes);
   React.useEffect(() => {
     processesRef.current = processes;
   }, [processes]);
+
+  const allProcessesForCrash = React.useMemo(() => {
+    return (Array.isArray(tabs) ? tabs : []).flatMap((t) => (Array.isArray(t.processes) ? t.processes : []));
+  }, [tabs]);
 
   // Console Modal
   const [consoleModalOpen, setConsoleModalOpen] = React.useState(false);
@@ -244,39 +295,20 @@ const api = React.useMemo(() => window.mu ?? window.electronAPI ?? window.api ??
     });
   }, [api]);
 
+  const confirmDialog = React.useCallback((options = {}) => {
+    const {
+      title = tRef.current('confirm.title'),
+      message = tRef.current('confirm.areYouSure'),
+      confirmText = tRef.current('confirm.confirm'),
+      cancelText = tRef.current('confirm.cancel'),
+      tone = 'danger',
+    } = options;
 
-const persistList = React.useCallback((list) => {
-  if (typeof api.saveProcesses !== "function") return;
-
-  // Não salvar estado "runtime" (running/checked/selected), só config.
-  const clean = (Array.isArray(list) ? list : []).map((p) => ({
-    id: p.id,
-    name: p.name,
-    path: p.path,
-    // futuros campos:
-    delayMs: p.delayMs ?? DEFAULT_STARTUP_DELAY_MS,
-    args: p.args ?? "",
-    run: p.run ?? true,
-  }));
-
-  api.saveProcesses(clean);
-}, [api]);
-
-  const confirmDialog = React.useCallback(
-    ({
-      title = "Confirmar",
-      message = "Tem certeza?",
-      confirmText = "OK",
-      cancelText = "Cancelar",
-      tone = "danger", // "danger" | "primary"
-    }) => {
-      return new Promise((resolve) => {
-        confirmResolverRef.current = resolve;
-        setConfirmState({ title, message, confirmText, cancelText, tone });
-      });
-    },
-    []
-  );
+    return new Promise((resolve) => {
+      confirmResolverRef.current = resolve;
+      setConfirmState({ title, message, confirmText, cancelText, tone });
+    });
+  }, []);
 
   const closeConfirm = React.useCallback((result) => {
     if (confirmResolverRef.current) {
@@ -285,6 +317,312 @@ const persistList = React.useCallback((list) => {
     }
     setConfirmState(null);
   }, []);
+
+
+const saveTabs = React.useCallback((rawTabs, activeId) => {
+  if (typeof api.saveProcesses !== "function") return;
+
+  const cleanProcessList = (l) =>
+    (Array.isArray(l) ? l : []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      path: p.path,
+      delayMs: p.delayMs ?? DEFAULT_STARTUP_DELAY_MS,
+      args: p.args ?? "",
+      run: p.run ?? true,
+    }));
+
+  const cleanedTabs = (Array.isArray(rawTabs) ? rawTabs : []).map((tab, idx) => ({
+    id: tab.id,
+    name: tab.name,
+    seq: Number.isInteger(tab?.seq) && tab.seq > 0 ? tab.seq : (idx + 1),
+    processes: cleanProcessList(tab.processes),
+  }));
+
+  const effectiveActiveTabId = activeId || cleanedTabs[0]?.id || null;
+  api.saveProcesses({ version: 2, activeTabId: effectiveActiveTabId, tabs: cleanedTabs });
+}, [api]);
+
+  const MAX_TABS = 10;
+
+  const tabsBarRef = React.useRef(null);
+  const [tabLayout, setTabLayout] = React.useState({ mode: 'fit', width: null, size: 'normal' });
+  const tabSizeRef = React.useRef('normal');
+
+  const recomputeTabLayout = React.useCallback(() => {
+    const el = tabsBarRef.current;
+    if (!el) return;
+
+    const count = (Array.isArray(tabsRef.current) ? tabsRef.current : []).length;
+    if (!count) {
+      tabSizeRef.current = 'normal';
+      setTabLayout((prev) => {
+        if (prev?.mode === 'fit' && prev?.width == null && prev?.size === 'normal') return prev;
+        return { mode: 'fit', width: null, size: 'normal' };
+      });
+      return;
+    }
+
+    const styles = getComputedStyle(el);
+    const paddingLeft = Number.parseFloat(styles.paddingLeft || '0px') || 0;
+    const paddingRight = Number.parseFloat(styles.paddingRight || '0px') || 0;
+    const safety = 2;
+    const innerWidth = Math.max(0, el.clientWidth - paddingLeft - paddingRight - safety);
+
+    const maxW = 220;
+    const normalGap = 4;
+    const compactGap = 2;
+    const microGap = 0;
+
+    const computeRaw = (gap) => {
+      const available = innerWidth - gap * Math.max(0, count - 1);
+      return Math.floor(available / count);
+    };
+
+    const baseRaw = computeRaw(normalGap);
+
+    const prevSize = tabSizeRef.current;
+    let nextSize = 'normal';
+    if (prevSize === 'normal') {
+      nextSize = baseRaw <= 48 ? 'micro' : (baseRaw <= 64 ? 'compact' : 'normal');
+    } else if (prevSize === 'compact') {
+      nextSize = baseRaw <= 48 ? 'micro' : (baseRaw >= 72 ? 'normal' : 'compact');
+    } else {
+      nextSize = baseRaw >= 72 ? 'normal' : (baseRaw >= 56 ? 'compact' : 'micro');
+    }
+
+    const gap = nextSize === 'micro' ? microGap : (nextSize === 'compact' ? compactGap : normalGap);
+
+    const raw = computeRaw(gap);
+    const width = Number.isFinite(raw) && raw > 0 ? Math.max(1, Math.min(maxW, raw)) : null;
+
+    tabSizeRef.current = nextSize;
+    setTabLayout((prev) => {
+      const next = { mode: 'fit', width, size: nextSize };
+      if (prev?.mode === next.mode && prev?.width === next.width && prev?.size === next.size) return prev;
+      return next;
+    });
+  }, []);
+
+  React.useEffect(() => {
+    recomputeTabLayout();
+  }, [tabs.length, recomputeTabLayout]);
+
+  React.useEffect(() => {
+    const el = tabsBarRef.current;
+    if (!el) return;
+
+    let raf = 0;
+    const schedule = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        recomputeTabLayout();
+      });
+    };
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => schedule());
+      ro.observe(el);
+      return () => {
+        if (raf) cancelAnimationFrame(raf);
+        ro.disconnect();
+      };
+    }
+
+    window.addEventListener('resize', schedule);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener('resize', schedule);
+    };
+  }, [recomputeTabLayout]);
+
+  const [tabTooltip, setTabTooltip] = React.useState(null);
+  const tabTooltipTimerRef = React.useRef(0);
+
+  React.useEffect(() => {
+    return () => {
+      if (tabTooltipTimerRef.current) {
+        clearTimeout(tabTooltipTimerRef.current);
+        tabTooltipTimerRef.current = 0;
+      }
+    };
+  }, []);
+
+  const showTabTooltip = React.useCallback((e, text) => {
+    const el = e.currentTarget;
+    if (!el) return;
+    if (tabTooltipTimerRef.current) {
+      clearTimeout(tabTooltipTimerRef.current);
+      tabTooltipTimerRef.current = 0;
+    }
+
+    tabTooltipTimerRef.current = window.setTimeout(() => {
+      const rect = el.getBoundingClientRect();
+      setTabTooltip({
+        text,
+        x: rect.left + rect.width / 2,
+        y: rect.bottom + 10,
+      });
+      tabTooltipTimerRef.current = 0;
+    }, 2000);
+  }, []);
+
+  const hideTabTooltip = React.useCallback(() => {
+    if (tabTooltipTimerRef.current) {
+      clearTimeout(tabTooltipTimerRef.current);
+      tabTooltipTimerRef.current = 0;
+    }
+    setTabTooltip(null);
+  }, []);
+
+  const createTab = React.useCallback(() => {
+    const rawTabs = Array.isArray(tabsRef.current) ? tabsRef.current : [];
+    if (rawTabs.length >= MAX_TABS) {
+      showToastRef.current(tRef.current('tabs.limitReached', { max: MAX_TABS }), 'warning');
+      return;
+    }
+
+    const usedSeq = new Set();
+    for (const tab of rawTabs) {
+      if (Number.isInteger(tab?.seq) && tab.seq > 0) {
+        usedSeq.add(tab.seq);
+        continue;
+      }
+      const m = String(tab?.name ?? '').match(/(\d+)\s*$/);
+      const parsed = m ? Number.parseInt(m[1], 10) : NaN;
+      if (Number.isFinite(parsed) && parsed > 0) usedSeq.add(parsed);
+    }
+
+    let nextSeq = null;
+    for (let n = 1; n <= MAX_TABS; n += 1) {
+      if (!usedSeq.has(n)) {
+        nextSeq = n;
+        break;
+      }
+    }
+
+    const seq = nextSeq ?? (rawTabs.length + 1);
+    const id = `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const name = `${tRef.current('tabs.serverName')} ${seq}`;
+    const nextTabs = [...rawTabs, { id, name, seq, processes: [] }];
+
+    tabsRef.current = nextTabs;
+    activeTabIdRef.current = id;
+
+    setTabs(nextTabs);
+    setActiveTabId(id);
+    saveTabs(nextTabs, id);
+  }, [saveTabs]);
+
+  const selectTab = React.useCallback((id) => {
+    setActiveTabId(id);
+    saveTabs(tabsRef.current, id);
+  }, [saveTabs]);
+
+  const onTabsWheel = React.useCallback((e) => {
+    hideTabTooltip();
+    const el = e.currentTarget;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+
+    const absX = Math.abs(e.deltaX);
+    const absY = Math.abs(e.deltaY);
+    if (absY <= absX) return;
+
+    e.preventDefault();
+    el.scrollLeft += e.deltaY;
+  }, [hideTabTooltip]);
+
+  const beginRenameTab = React.useCallback((id) => {
+    const rawTabs = Array.isArray(tabsRef.current) ? tabsRef.current : [];
+    const tab = rawTabs.find((t) => t.id === id);
+    if (!tab) return;
+    setEditingTabId(id);
+    setTabNameDraft(tab.name ?? "");
+  }, []);
+
+  const cancelRenameTab = React.useCallback(() => {
+    setEditingTabId(null);
+    setTabNameDraft("");
+  }, []);
+
+  const commitRenameTab = React.useCallback((id, rawName) => {
+    const nextName = String(rawName ?? "").trim().slice(0, SERVER_NAME_MAX_CHARS);
+
+    const rawTabs = Array.isArray(tabsRef.current) ? tabsRef.current : [];
+    const nextTabs = rawTabs.map((t) => {
+      if (t.id !== id) return t;
+      if (!nextName) return t;
+      return { ...t, name: nextName };
+    });
+
+    setTabs(nextTabs);
+    setEditingTabId(null);
+    setTabNameDraft("");
+    saveTabs(nextTabs, activeTabIdRef.current);
+  }, [saveTabs]);
+
+  const closeTab = React.useCallback(async (id) => {
+    const rawTabs = Array.isArray(tabsRef.current) ? tabsRef.current : [];
+    const tabIndex = rawTabs.findIndex((t) => t.id === id);
+    if (tabIndex < 0) return;
+    if (tabIndex === 0) return;
+
+    const tab = rawTabs[tabIndex];
+    const processCount = Array.isArray(tab?.processes) ? tab.processes.length : 0;
+    const runningCount = (Array.isArray(tab?.processes) ? tab.processes : []).filter((p) => p?.running).length;
+
+    const message = runningCount > 0
+      ? tRef.current('confirm.closeTabMessageRunning', { count: runningCount })
+      : processCount > 0
+        ? tRef.current('confirm.closeTabMessageHasProcesses', { count: processCount })
+        : tRef.current('confirm.closeTabMessageEmpty', { name: tab?.name ?? '' });
+
+    const ok = await confirmDialog({
+      title: tRef.current('confirm.closeTabTitle'),
+      message,
+      confirmText: tRef.current('common.close'),
+      cancelText: tRef.current('confirm.cancel'),
+      tone: 'danger',
+    });
+    if (!ok) return;
+
+    let nextTabs = rawTabs.filter((t) => t.id !== id);
+    let nextActiveId = activeTabIdRef.current;
+
+    if (nextTabs.length === 0) {
+      const newId = `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      nextTabs = [{ id: newId, name: `${tRef.current('tabs.serverName')} 1`, seq: 1, processes: [] }];
+      nextActiveId = newId;
+    } else if (nextActiveId === id) {
+      nextActiveId = nextTabs[Math.max(0, tabIndex - 1)]?.id ?? nextTabs[0]?.id ?? null;
+    }
+
+    tabsRef.current = nextTabs;
+    activeTabIdRef.current = nextActiveId;
+
+    setEditingTabId(null);
+    setTabNameDraft("");
+    setTabs(nextTabs);
+    setActiveTabId(nextActiveId);
+    saveTabs(nextTabs, nextActiveId);
+  }, [confirmDialog, saveTabs]);
+
+  React.useEffect(() => {
+    if (!processesLoaded) return;
+    if (!activeTabId) return;
+    saveTabs(tabsRef.current, activeTabId);
+  }, [activeTabId, processesLoaded, saveTabs]);
+
+const persistList = React.useCallback((list) => {
+  const activeId = activeTabIdRef.current;
+  const rawTabs = Array.isArray(tabsRef.current) ? tabsRef.current : [];
+  const nextTabs = rawTabs.map((tab) => {
+    if (tab.id !== activeId) return tab;
+    return { ...tab, processes: Array.isArray(list) ? list : [] };
+  });
+
+  saveTabs(nextTabs, activeId);
+}, [saveTabs]);
 
 
   // Cleanup global: limpa todos os recursos quando o componente desmonta ou app fecha
@@ -322,36 +660,78 @@ const persistList = React.useCallback((list) => {
   (async () => {
     try {
       if (typeof api.loadProcesses !== "function") {
-        if (alive) setProcesses([]);
+        if (alive) {
+          const id = `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          setTabs([{ id, name: `${tRef.current('tabs.serverName')} 1`, seq: 1, processes: [] }]);
+          setActiveTabId(id);
+        }
         return;
       }
 
       const saved = await api.loadProcesses();
       if (!alive) return;
 
-      // Se o arquivo ainda não existe (null) ou estiver inválido, mantém vazio
-      if (!Array.isArray(saved)) {
-        setProcesses([]);
-        return;
+      const makeTabName = (seq) => `${tRef.current('tabs.serverName')} ${seq}`;
+      const isLegacyKeyName = (name) => String(name ?? '').trim().startsWith('tabs.serverName');
+
+      const normalizeProcess = (p, i) => ({
+        ...p,
+        id: p.id ?? `p-${Date.now()}-${i}-${p.name ?? "process"}`,
+        delayMs: (p.delayMs == null || p.delayMs === 1000) ? DEFAULT_STARTUP_DELAY_MS : p.delayMs,
+        running: false,
+        checked: false,
+        selected: false,
+        windowHidden: false,
+      });
+
+      const normalizeTab = (tab, idx) => {
+        const id = tab?.id ?? `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const rawName = String(tab?.name ?? "").trim();
+        const parsedSeqMatch = rawName.match(/(\d+)\s*$/);
+        const parsedSeq = parsedSeqMatch ? Number.parseInt(parsedSeqMatch[1], 10) : NaN;
+        const seq = Number.isInteger(tab?.seq) && tab.seq > 0
+          ? tab.seq
+          : (Number.isFinite(parsedSeq) && parsedSeq > 0 ? parsedSeq : (idx + 1));
+
+        const name = (!rawName || isLegacyKeyName(rawName)) ? makeTabName(seq) : rawName;
+        const processes = (Array.isArray(tab?.processes) ? tab.processes : []).map(normalizeProcess);
+        return { id, name, seq, processes };
+      };
+
+      let nextTabs = [];
+      let nextActiveId = null;
+
+      if (Array.isArray(saved)) {
+        const id = `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        nextTabs = [{
+          id,
+          name: `${tRef.current('tabs.serverName')} 1`,
+          seq: 1,
+          processes: saved.map(normalizeProcess),
+        }];
+        nextActiveId = id;
+      } else if (saved && typeof saved === 'object' && Array.isArray(saved.tabs)) {
+        nextTabs = saved.tabs.map(normalizeTab).slice(0, MAX_TABS);
+        if (nextTabs.length === 0) {
+          const id = `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          nextTabs = [{ id, name: makeTabName(1), seq: 1, processes: [] }];
+        }
+        const candidate = saved.activeTabId;
+        nextActiveId = nextTabs.some((t) => t.id === candidate) ? candidate : nextTabs[0]?.id ?? null;
+      } else {
+        const id = `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        nextTabs = [{ id, name: `${tRef.current('tabs.serverName')} 1`, seq: 1, processes: [] }];
+        nextActiveId = id;
       }
 
-      // garante id mesmo se vier "cru" do disco
-      setProcesses(
-        saved.map((p, i) => ({
-          ...p,
-          id: p.id ?? `p-${Date.now()}-${i}-${p.name ?? "process"}`,
-          // migração: versões antigas salvavam 1000ms, agora usamos um padrão maior para dar tempo do modal "OK"
-          delayMs: (p.delayMs == null || p.delayMs === 1000) ? DEFAULT_STARTUP_DELAY_MS : p.delayMs,
-
-          // runtime sempre reseta ao abrir
-          running: false,
-          checked: false,
-          selected: false,
-          windowHidden: false,
-        }))
-      );
+      setTabs(nextTabs);
+      setActiveTabId(nextActiveId);
 } catch {
-      if (alive) setProcesses([]);
+      if (alive) {
+        const id = `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        setTabs([{ id, name: `${tRef.current('tabs.serverName')} 1`, seq: 1, processes: [] }]);
+        setActiveTabId(id);
+      }
     } finally {
       if (alive) setProcessesLoaded(true);
     }
@@ -414,7 +794,7 @@ const persistList = React.useCallback((list) => {
         return newProcesses;
       });
     }
-    }, [list, searchQuery, moveItemInArray, persistList]);
+    }, [list, searchQuery, moveItemInArray, persistList, setProcesses]);
 
   // Event listener global para mover o preview com o cursor E reorganizar itens automaticamente
   React.useEffect(() => {
@@ -507,7 +887,7 @@ const persistList = React.useCallback((list) => {
       }
       document.removeEventListener('dragover', handleDragMove);
     };
-  }, [draggedIndex]);
+  }, [draggedIndex, setProcesses]);
 
 
   // ===== Toast helper (PRECISA estar ANTES das funções que usam) =====
@@ -531,11 +911,37 @@ const persistList = React.useCallback((list) => {
 
   // ===== Electron runtime API (start/stop/show/hide) =====
   const sleep = React.useCallback((ms) => new Promise((r) => setTimeout(r, ms)), []);
+
+  const findProcessById = React.useCallback((id) => {
+    const rawTabs = Array.isArray(tabsRef.current) ? tabsRef.current : [];
+    for (const tab of rawTabs) {
+      const list = Array.isArray(tab?.processes) ? tab.processes : [];
+      const proc = list.find((p) => p.id === id);
+      if (proc) return proc;
+    }
+    return null;
+  }, []);
+
+  const updateProcessById = React.useCallback((id, updater) => {
+    setTabs((prevTabs) => {
+      return (Array.isArray(prevTabs) ? prevTabs : []).map((tab) => {
+        const list = Array.isArray(tab?.processes) ? tab.processes : [];
+        let changed = false;
+
+        const nextList = list.map((p) => {
+          if (p.id !== id) return p;
+          changed = true;
+          return typeof updater === "function" ? updater(p) : { ...p, ...(updater ?? {}) };
+        });
+
+        return changed ? { ...tab, processes: nextList } : tab;
+      });
+    });
+  }, []);
   
   // startOne precisa ser useCallback porque é passado para useCrashDetection
   const startOne = React.useCallback(async (id) => {
-    // USA O REF para pegar o valor ATUAL de processes
-    const proc = processesRef.current.find((p) => p.id === id);
+    const proc = findProcessById(id);
     
     if (!proc) {
       console.error('[startOne] Processo não encontrado:', id);
@@ -544,7 +950,7 @@ const persistList = React.useCallback((list) => {
 
     // Fallback (web / sem Electron)
     if (typeof api.startProcess !== "function") {
-      setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: true, windowHidden: false } : p)));
+      updateProcessById(id, { running: true, windowHidden: false });
       return;
     }
 
@@ -562,7 +968,7 @@ const persistList = React.useCallback((list) => {
       return;
     }
 
-    setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: true, windowHidden: false } : p)));
+    updateProcessById(id, { running: true, windowHidden: false });
 
     // 2) Auto Click OK em diálogos MUDevs (se ativado) - UNIVERSAL para TODOS os processos
     if (autoOKDialogs && res.pid) {
@@ -584,27 +990,27 @@ const persistList = React.useCallback((list) => {
       }
     }
 
-  }, [api, showToast, autoOKDialogs, t, sleep]);
+  }, [api, showToast, autoOKDialogs, t, sleep, findProcessById, updateProcessById]);
 
   const stopOne = React.useCallback(async (id) => {
-    const proc = processesRef.current.find((p) => p.id === id);
+    const proc = findProcessById(id);
     if (!proc) return;
 
     // Electron real stop
     if (typeof api.stopProcess === "function") {
       const res = await api.stopProcess(id);
       if (res?.ok !== false) {
-        setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: false, windowHidden: false } : p)));
+        updateProcessById(id, { running: false, windowHidden: false });
       }
       return;
     }
 
     // fallback (UI only)
-    setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: false, windowHidden: false } : p)));
-  }, [api]);
+    updateProcessById(id, { running: false, windowHidden: false });
+  }, [api, findProcessById, updateProcessById]);
 
   const restartOne = React.useCallback(async (id) => {
-    const proc = processesRef.current.find((p) => p.id === id);
+    const proc = findProcessById(id);
     if (!proc?.path) return;
 
     if (typeof api.restartProcess === "function") {
@@ -612,7 +1018,7 @@ const persistList = React.useCallback((list) => {
       const res = await api.restartProcess({ id, hidden: false });
       if (!res?.ok) return;
 
-      setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: true, windowHidden: false } : p)));
+      updateProcessById(id, { running: true, windowHidden: false });
 
       // Auto Click OK em diálogos MUDevs (se ativado) - UNIVERSAL para TODOS os processos
       if (autoOKDialogs && res.pid) {
@@ -639,20 +1045,20 @@ const persistList = React.useCallback((list) => {
 
     await stopOne(id);
     setTimeout(() => startOne(id), 350);
-  }, [api, autoOKDialogs, startOne, stopOne, sleep]);
+  }, [api, autoOKDialogs, startOne, stopOne, sleep, findProcessById, updateProcessById]);
 
 
 const showWindow = React.useCallback(async (id) => {
   if (typeof api.showProcessWindow !== "function") return;
   await api.showProcessWindow(id);
-  setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, windowHidden: false } : p)));
-}, [api]);
+  updateProcessById(id, { windowHidden: false });
+}, [api, updateProcessById]);
 
 const hideWindow = React.useCallback(async (id) => {
   if (typeof api.hideProcessWindow !== "function") return;
   await api.hideProcessWindow(id);
-  setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, windowHidden: true } : p)));
-}, [api]);
+  updateProcessById(id, { windowHidden: true });
+}, [api, updateProcessById]);
 
   const showAllWindows = React.useCallback(async () => {
     if (typeof api.showAllProcessWindows === "function") {
@@ -666,7 +1072,7 @@ const hideWindow = React.useCallback(async (id) => {
     for (const p of currentProcesses) {
       if (p.running) await showWindow(p.id);
     }
-  }, [api, showWindow]);
+  }, [api, showWindow, setProcesses]);
 
 const hideAllWindows = React.useCallback(async () => {
   // não existe handler "hide all" no backend, então fazemos via loop
@@ -1239,10 +1645,10 @@ const hideAllWindows = React.useCallback(async () => {
     }
 
     const confirmed = await confirmDialog({
-      title: 'Parar Todos os Processos?',
-      message: `Você está prestes a parar ${runningCount} processo${runningCount > 1 ? 's' : ''} em execução. Esta ação não pode ser desfeita.`,
-      confirmText: 'Sim, Parar Todos',
-      cancelText: 'Cancelar',
+      title: t('confirm.stopAllTitle'),
+      message: t('confirm.stopAllMessage', { count: runningCount }),
+      confirmText: t('confirm.stopAllConfirm'),
+      cancelText: t('confirm.cancel'),
       tone: 'danger'
     });
 
@@ -1274,10 +1680,10 @@ const hideAllWindows = React.useCallback(async () => {
     }
 
     const confirmed = await confirmDialog({
-      title: 'Reiniciar Todos os Processos?',
-      message: `Você está prestes a reiniciar ${processCount} processo${processCount > 1 ? 's' : ''}. Todos os processos serão parados e reiniciados.`,
-      confirmText: 'Sim, Reiniciar Todos',
-      cancelText: 'Cancelar',
+      title: t('confirm.restartAllTitle'),
+      message: t('confirm.restartAllMessage', { count: processCount }),
+      confirmText: t('confirm.restartAllConfirm'),
+      cancelText: t('confirm.cancel'),
       tone: 'danger'
     });
 
@@ -1326,7 +1732,7 @@ const hideAllWindows = React.useCallback(async () => {
     cancelCrashRestart,
     skipCrashAndContinue,
     manualRestartAfterCrash,
-  } = useCrashDetection(processes, startOne, showToast);
+  } = useCrashDetection(allProcessesForCrash, startOne, showToast);
 
   // Listener para detectar crash de processos (DEPOIS do hook para ter handleProcessCrash definido)
   React.useEffect(() => {
@@ -1335,29 +1741,21 @@ const hideAllWindows = React.useCallback(async () => {
     return api.onProcessExited(({ id, wasManualStop, crashed, exitCode, detectedByWatchdog }) => {
       console.log('[App] Recebeu process-exited:', { id, wasManualStop, crashed, exitCode, detectedByWatchdog });
       
-      // Atualiza o estado do processo
-      setProcesses((prev) => {
-        const updatedProcesses = prev.map((p) => (p.id === id ? { ...p, running: false, windowHidden: false } : p));
+      updateProcessById(id, { running: false, windowHidden: false });
+
+      if (crashed && !wasManualStop) {
+        const processName = findProcessById(id)?.name || id;
+        const detectionMethod = detectedByWatchdog ? 'watchdog' : 'exit event';
+        addErrorLogRef.current(
+          'process',
+          tRef.current('error.processCrashed', { name: processName, code: exitCode, method: detectionMethod })
+        );
         
-        // Se crashou (exitCode !== 0), inicia sistema de auto-restart
-        // Fazemos isso aqui dentro para ter acesso aos dados atualizados
-        if (crashed && !wasManualStop) {
-          const processName = updatedProcesses.find(p => p.id === id)?.name || id;
-          const detectionMethod = detectedByWatchdog ? 'watchdog' : 'exit event';
-          addErrorLogRef.current(
-            'process',
-            tRef.current('error.processCrashed', { name: processName, code: exitCode, method: detectionMethod })
-          );
-          
-          console.log('[App] Chamando handleProcessCrash para:', id);
-          // Chama handleProcessCrash após o setState para garantir que o estado está atualizado
-          setTimeout(() => handleProcessCrash(id), 0);
-        }
-        
-        return updatedProcesses;
-      });
+        console.log('[App] Chamando handleProcessCrash para:', id);
+        setTimeout(() => handleProcessCrash(id), 0);
+      }
     });
-  }, [api, handleProcessCrash]);
+  }, [api, handleProcessCrash, updateProcessById, findProcessById]);
 
   const addProcess = async () => {
   // Electron: abre seletor de .exe
@@ -1408,15 +1806,15 @@ const hideAllWindows = React.useCallback(async () => {
     if (n <= 0) return;
 
     const ok = await confirmDialog({
-      title: "Remover processos",
-      message: `Remover ${n} processo(s) marcado(s)?`,
-      confirmText: "Remover",
-      cancelText: "Cancelar",
+      title: t('confirm.removeCheckedTitle'),
+      message: t('confirm.removeCheckedMessage', { count: n }),
+      confirmText: t('confirm.removeCheckedConfirm'),
+      cancelText: t('confirm.cancel'),
       tone: "danger",
     });
     if (!ok) return;
 
-    showUndo(snapshot, `Removidos ${n} processo(s).`);
+    showUndo(snapshot, t('undo.removed_count', { count: n }));
 setProcesses(() => {
   const next = snapshot.filter((p) => !p.checked);
   persistList(next);
@@ -1430,15 +1828,15 @@ setProcesses(() => {
     if (snapshot.length === 0) return;
 
     const ok = await confirmDialog({
-      title: "Limpar lista",
-      message: "Limpar todos os processos da lista?",
-      confirmText: "Limpar",
-      cancelText: "Cancelar",
+      title: t('confirm.clearAllTitle'),
+      message: t('confirm.clearAllMessage'),
+      confirmText: t('confirm.clearAllConfirm'),
+      cancelText: t('confirm.cancel'),
       tone: "danger",
     });
     if (!ok) return;
 
-    showUndo(snapshot, `Lista limpa (${snapshot.length} itens).`);
+    showUndo(snapshot, t('undo.cleared_count', { count: snapshot.length }));
 setProcesses(() => {
   persistList([]);
   return [];
@@ -1660,44 +2058,48 @@ setProcesses(() => {
           {/* MAIN */}
           <main className="relative sm-main-panel z-10 -ml-[32px] flex-1 min-w-0 rounded-l-[0px] bg-[#050505]/95 px-6 xl:px-9 py-[36px]">
             {/* VIEW: PROCESS LIST */}
-            <div className="grid h-full grid-cols-[minmax(0,1fr)_320px] grid-rows-[auto_1fr] gap-x-4 gap-y-6">
-              <div className="col-start-1 row-start-1 flex items-center gap-3">
+            <div className="grid h-full grid-cols-[minmax(0,1fr)_320px] grid-rows-[auto_1fr] gap-x-4 gap-y-4">
+              <div className="col-start-1 row-start-1 flex items-center justify-start gap-3 min-w-0">
                 <h1 className="text-[22px] font-semibold text-white">
                   {t('header.processes')}
                 </h1>
 
-                <div className="relative group">
-                  <button
-                    type="button"
-                    onClick={allWindowsVisible ? hideAllWindows : showAllWindows}
-                    className={[
-                      "h-[32px] w-[32px] rounded-full border border-white/15 flex items-center justify-center transition",
-                      allWindowsVisible
-                        ? "bg-[#0056B9]/15 border-[#0056B9]/60 text-[#0056B9]"
-                        : "bg-black/20 hover:border-white/25 text-white/70 hover:text-white",
-                    ].join(" ")}
-                  >
-                  {/* ícone "lâmpada" inline */}
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M12 2a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2Z"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinejoin="round"
-                    />
-                    <path d="M9 21h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </button>
-                
-                {/* Tooltip Customizado - Glass Morphism */}
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
-                  <div className="px-3 py-1.5 rounded-lg bg-black/80 backdrop-blur-md border border-white/10 shadow-lg whitespace-nowrap">
-                    <span className="text-[11px] text-white/90 font-medium">
-                      {allWindowsVisible ? t('sidebar.hideAll') : t('sidebar.showAll')}
-                    </span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="relative group flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={allWindowsVisible ? hideAllWindows : showAllWindows}
+                      className={[
+                        "h-[32px] w-[32px] rounded-full border border-white/15 flex items-center justify-center transition",
+                        allWindowsVisible
+                          ? "bg-[#0056B9]/15 border-[#0056B9]/60 text-[#0056B9]"
+                          : "bg-black/20 hover:border-white/25 text-white/70 hover:text-white",
+                      ].join(" ")}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M12 2a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2Z"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinejoin="round"
+                        />
+                        <path d="M9 21h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    </button>
+
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+                      <div className="px-3 py-1.5 rounded-lg bg-black/80 backdrop-blur-md border border-white/10 shadow-lg whitespace-nowrap">
+                        <span className="text-[11px] text-white/90 font-medium">
+                          {allWindowsVisible ? t('sidebar.hideAll') : t('sidebar.showAll')}
+                        </span>
+                      </div>
+                    </div>
                   </div>
+
+                  <span className="text-[12px] text-white/60 font-medium truncate max-w-[240px]">
+                    {t('header.executables')}: {allWindowsVisible ? t('sidebar.hideAll') : t('sidebar.showAll')}
+                  </span>
                 </div>
-              </div>
               </div>
 
               <div className="col-start-2 row-start-1 flex items-start justify-end">
@@ -1711,22 +2113,129 @@ setProcesses(() => {
 
               {/* LISTA */}
               {processesLoaded && (
-              <section data-glow className="col-start-1 row-start-2 min-h-0 rounded-[28px] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.55)] sm-glass-card overflow-y-auto overflow-x-hidden">
-                {processes.length === 0 ? (
+              <section data-glow className="col-start-1 row-start-2 min-h-0 rounded-[28px] shadow-[0_20px_60px_rgba(0,0,0,0.55)] sm-glass-card overflow-hidden flex flex-col">
+                <div className={[
+                  "sm-card-tabs",
+                  tabLayout.size === 'compact' || tabLayout.size === 'micro' ? "sm-card-tabs--compact" : "",
+                  tabLayout.size === 'micro' ? "sm-card-tabs--micro" : "",
+                ].filter(Boolean).join(" ")}>
+                  <div className="sm-tabs-rail">
+                    <div
+                      ref={tabsBarRef}
+                      className={["sm-tabs-bar", tabLayout.mode === 'fit' ? "sm-tabs-bar--fit" : "sm-tabs-bar--scroll"].join(" ")}
+                      onWheel={onTabsWheel}
+                      onScroll={hideTabTooltip}
+                    >
+                      {(Array.isArray(tabs) ? tabs : []).map((tab, idx) => {
+                        const active = tab.id === activeTab?.id;
+                        const editing = tab.id === editingTabId;
+                        const canClose = idx !== 0;
+                        const compact = tabLayout.size === 'compact' || tabLayout.size === 'micro';
+                        const micro = tabLayout.size === 'micro';
+                        const fixed = tabLayout.mode === 'fit' && Number.isFinite(tabLayout.width) && (tabLayout.width ?? 0) > 0;
+                        const tabStyle = fixed ? { flex: `0 0 ${tabLayout.width}px`, maxWidth: `${tabLayout.width}px` } : undefined;
+                        const compactLabelMatch = String(tab?.name ?? '').match(/(\d+)\s*$/);
+                        const compactLabel = String(tab?.seq ?? compactLabelMatch?.[1] ?? (idx + 1));
+                        return (
+                          <div
+                            key={tab.id}
+                            className={["sm-tab", active ? "sm-tab--active" : "", compact ? "sm-tab--compact" : "", micro ? "sm-tab--micro" : ""].filter(Boolean).join(" ")}
+                            style={tabStyle}
+                            onMouseEnter={(e) => {
+                              if (!editing) showTabTooltip(e, tab.name);
+                            }}
+                            onMouseLeave={hideTabTooltip}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => selectTab(tab.id)}
+                              onDoubleClick={() => {
+                                beginRenameTab(tab.id);
+                              }}
+                              className="sm-tab__btn"
+                            >
+                              {editing ? (
+                                <input
+                                  ref={tabNameInputRef}
+                                  value={tabNameDraft}
+                                  onChange={(e) => setTabNameDraft(e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      commitRenameTab(tab.id, tabNameDraft);
+                                    }
+                                    if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      cancelRenameTab();
+                                    }
+                                  }}
+                                  onBlur={() => commitRenameTab(tab.id, tabNameDraft)}
+                                  className="sm-tab__input"
+                                />
+                              ) : compact ? (
+                                <span className="sm-tab__label sm-tab__label--compact">{compactLabel}</span>
+                              ) : (
+                                <span className="sm-tab__label">{tab.name}</span>
+                              )}
+                            </button>
+
+                            {canClose ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  closeTab(tab.id);
+                                }}
+                                className="sm-tab__close"
+                                aria-label="Fechar aba"
+                              >
+                                <span className="text-[18px] leading-none">×</span>
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={createTab}
+                    disabled={(Array.isArray(tabs) ? tabs : []).length >= MAX_TABS}
+                    className={[
+                      "sm-tab",
+                      "sm-tab--add",
+                      "sm-tab--add-fixed",
+                      "flex-shrink-0",
+                      tabLayout.size === 'micro' ? "sm-tab--add-micro" : "",
+                    ].filter(Boolean).join(" ")}
+                    aria-label={t('tabs.newTab')}
+                    title={(Array.isArray(tabs) ? tabs : []).length >= MAX_TABS ? t('tabs.limitReached', { max: MAX_TABS }) : t('tabs.newTab')}
+                  >
+                    <span className="sm-tab__add-icon">+</span>
+                  </button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-5">
+                  {processes.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center gap-4 text-center px-8">
                     <svg className="w-24 h-24 text-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                     </svg>
                     <div className="space-y-2">
-                      <p className="text-lg font-medium text-white/40">Nenhum Processo Adicionado</p>
+                      <p className="text-lg font-medium text-white/40">{t('emptyState.noProcessesTitle')}</p>
                       <p className="text-sm text-white/25 max-w-md">
-                        Clique no botão <span className="text-white/40 font-medium">Adicionar</span> acima para configurar seu primeiro executável.
+                        {t('emptyState.noProcessesHintBefore')}
+                        <span className="text-white/40 font-medium">{t('sidebar.addProcess')}</span>
+                        {t('emptyState.noProcessesHintAfter')}
                       </p>
                     </div>
                   </div>
                 ) : list.length === 0 ? (
                   <div className="flex h-full items-center justify-center text-sm text-white/50">
-                    Nenhum Processo Encontrado.
+                    {t('emptyState.noResults')}
                   </div>
                 ) : (
                   <div 
@@ -1889,6 +2398,7 @@ setProcesses(() => {
                     })}
                   </div>
                 )}
+                </div>
 
               </section>
               )}
@@ -2031,6 +2541,17 @@ setProcesses(() => {
           </main>
         </div>
       </div>
+
+      {tabTooltip ? (
+        <div
+          className="fixed z-[2600] pointer-events-none"
+          style={{ left: tabTooltip.x, top: tabTooltip.y, transform: 'translateX(-50%)' }}
+        >
+          <div className="sm-tooltip">
+            <span className="sm-tooltip__text">{tabTooltip.text}</span>
+          </div>
+        </div>
+      ) : null}
 
       
       {/* MODAL CONFIGURAÇÕES SQL */}
@@ -3290,6 +3811,7 @@ function Field({ placeholder, type = "text", value, onChange }) {
 }
 
 function ContextMenu({ x, y, proc, onClose, onShow, onHide, onStart, onStop, onRestart }) {
+  const { t } = useTranslation();
   const running = !!proc?.running;
   const hidden = !!proc?.windowHidden;
 
@@ -3299,17 +3821,17 @@ function ContextMenu({ x, y, proc, onClose, onShow, onHide, onStart, onStop, onR
       style={{ left: x, top: y }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <div className="min-w-[200px] rounded-[14px] border border-white/10 bg-[#111111] shadow-[0_20px_60px_rgba(0,0,0,0.65)] p-2 sm-glass-card">
+      <div className="sm-context-menu min-w-[200px] rounded-[14px] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.65)] p-2 sm-glass-card">
         {/* Header com nome e botão fechar */}
         <div className="flex items-center justify-between px-2 py-1">
           <div className="text-[12px] text-[#0056B9] font-medium truncate">
-            {proc?.name ?? "Processo"}
+            {proc?.name ?? t('contextMenu.process')}
           </div>
           <button
             type="button"
             onClick={onClose}
             className="ml-2 flex-shrink-0 h-5 w-5 rounded flex items-center justify-center hover:bg-white/10 transition-colors"
-            aria-label="Fechar"
+            aria-label={t('common.close')}
           >
             <span className="text-white/60 text-[16px] leading-none hover:text-white/90">×</span>
           </button>
@@ -3317,21 +3839,21 @@ function ContextMenu({ x, y, proc, onClose, onShow, onHide, onStart, onStop, onR
         <div className="mt-1 h-px bg-white/10" />
 
         <MenuItem disabled={!running || !hidden} onClick={() => { onShow(); onClose(); }}>
-          Show (mostrar janela)
+          {t('contextMenu.show')}
         </MenuItem>
         <MenuItem disabled={!running || hidden} onClick={() => { onHide(); onClose(); }}>
-          Hide (ocultar janela)
+          {t('contextMenu.hide')}
         </MenuItem>
 
         <div className="my-1 h-px bg-white/10" />
 
         {running ? (
           <>
-            <MenuItem onClick={() => { onRestart(); onClose(); }}>Reiniciar</MenuItem>
-            <MenuItem tone="danger" onClick={() => { onStop(); onClose(); }}>Parar</MenuItem>
+            <MenuItem onClick={() => { onRestart(); onClose(); }}>{t('contextMenu.restart')}</MenuItem>
+            <MenuItem tone="danger" onClick={() => { onStop(); onClose(); }}>{t('contextMenu.stop')}</MenuItem>
           </>
         ) : (
-          <MenuItem onClick={() => { onStart(); onClose(); }}>Iniciar</MenuItem>
+          <MenuItem onClick={() => { onStart(); onClose(); }}>{t('contextMenu.start')}</MenuItem>
         )}
       </div>
     </div>

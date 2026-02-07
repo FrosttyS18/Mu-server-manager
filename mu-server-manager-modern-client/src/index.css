@@ -21,6 +21,17 @@ html, body {
   background: transparent; /* Transparente para janela arredondada funcionar */
   color: var(--text);
   overflow: hidden; /* Previne scroll no body */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable],
+[contenteditable="true"],
+[contenteditable=""] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Scrollbar premium (Electron/Chromium) */

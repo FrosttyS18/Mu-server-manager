@@ -659,6 +659,443 @@ input.ui-input--search:focus-visible{
   transform: translateY(0px) scale(.99);
 }
 
+
+.sm-card-tabs{
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.sm-card-tabs--compact{
+  gap: 4px;
+  padding: 8px 8px 0;
+}
+
+.sm-card-tabs--micro{
+  gap: 2px;
+  padding: 6px 6px 0;
+}
+
+.sm-tabs-rail{
+  display: flex;
+  align-items: flex-end;
+  flex: 1;
+  min-width: 0;
+  padding: 0 2px 0 0;
+  overflow: hidden;
+}
+
+.sm-card-tabs--compact .sm-tabs-rail,
+.sm-card-tabs--micro .sm-tabs-rail{
+  padding: 0;
+}
+
+.sm-tabs-bar{
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: transparent;
+  border: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.sm-card-tabs--compact .sm-tabs-bar{
+  gap: 2px;
+}
+
+.sm-card-tabs--micro .sm-tabs-bar{
+  gap: 0px;
+}
+
+.sm-tabs-bar::-webkit-scrollbar{
+  height: 0;
+}
+
+.sm-tabs-bar--fit{
+  overflow-x: hidden;
+}
+
+.sm-tabs-bar--scroll{
+  overflow-x: auto;
+}
+
+.sm-tab{
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  max-width: 220px;
+  min-width: 0;
+  height: 32px;
+  box-sizing: border-box;
+  border-radius: 12px 12px 0 0;
+  background: rgba(0, 0, 0, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.62);
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  overflow: hidden;
+}
+
+.sm-tab--compact{
+  height: 24px;
+  border-radius: 9px 9px 0 0;
+}
+
+.sm-tab--compact .sm-tab__btn{
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.sm-tab--compact .sm-tab__close{
+  top: 1px;
+  right: 1px;
+  width: 20px;
+  height: 20px;
+  border-radius: 7px;
+}
+
+.sm-tab--micro{
+  height: 22px;
+  border-radius: 8px 8px 0 0;
+}
+
+.sm-tab--micro .sm-tab__btn{
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.sm-tab--micro .sm-tab__close{
+  top: 1px;
+  right: 1px;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+}
+
+.sm-tab--micro.sm-tab--active .sm-tab__close,
+.sm-tab--compact.sm-tab--active .sm-tab__close{
+  opacity: 1;
+  transform: none;
+}
+
+.sm-tab__label--compact{
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.sm-tab--active .sm-tab__label--compact{
+  color: rgba(var(--sm-primary), 0.95);
+}
+
+.sm-tab--active .sm-tab__label{
+  color: rgba(var(--sm-primary), 0.95);
+}
+
+.sm-tab:hover{
+  background: rgba(0, 0, 0, 0.18);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.90);
+}
+
+.sm-tab:active{
+  transform: scale(0.99);
+}
+
+.sm-tab--active{
+  background: rgba(23, 23, 23, var(--sm-glass-alpha));
+  backdrop-filter: blur(var(--sm-glass-blur)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--sm-glass-blur)) saturate(1.2);
+  border-color: var(--sm-glass-border);
+  border-bottom-color: transparent;
+  color: rgba(255, 255, 255, 0.98);
+  margin-bottom: -1px;
+  z-index: 3;
+  box-shadow: inset 0 0 0 1px rgba(var(--sm-primary), 0.14);
+}
+
+.sm-tab--active::after{
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: rgba(23, 23, 23, var(--sm-glass-alpha));
+}
+
+.sm-tab__btn{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  width: 100%;
+  padding: 0 34px 0 12px;
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sm-tab--compact .sm-tab__btn,
+.sm-tab--micro .sm-tab__btn{
+  height: 100%;
+}
+
+.sm-tab__label{
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sm-tab__close{
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateX(2px);
+  transition: opacity 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.sm-tab--compact .sm-tab__close,
+.sm-tab--micro .sm-tab__close{
+  opacity: 0;
+  transform: none;
+}
+
+.sm-tab:hover .sm-tab__close{
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.sm-tab__close:hover{
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.90);
+}
+
+.sm-tab__close--spacer{
+  opacity: 0 !important;
+  cursor: default;
+  pointer-events: none;
+}
+
+.sm-tab__input{
+  height: 26px;
+  width: 100%;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 0 28px 0 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.92);
+  outline: none;
+}
+
+@media (max-width: 1200px){
+  .sm-tabs-bar{
+    gap: 4px;
+  }
+  .sm-tab{
+    max-width: 180px;
+    min-width: 52px;
+  }
+  .sm-tab__btn{
+    padding: 0 32px 0 10px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 900px){
+  .sm-card-tabs{
+    gap: 6px;
+    padding: 12px 10px 0;
+  }
+  .sm-tabs-bar{
+    gap: 2px;
+  }
+  .sm-tab{
+    max-width: 140px;
+    min-width: 0;
+  }
+  .sm-tab__btn{
+    padding: 0 8px 0 6px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .sm-tab__input{
+    padding: 0 10px;
+  }
+  .sm-tab--add{
+    width: 28px;
+    height: 28px;
+  }
+  .sm-tab__add-icon{
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 700px){
+  .sm-card-tabs{
+    gap: 4px;
+    padding: 10px 8px 0;
+  }
+  .sm-tabs-bar{
+    gap: 2px;
+  }
+  .sm-tab{
+    max-width: 120px;
+    min-width: 0;
+  }
+  .sm-tab__btn{
+    padding: 0 6px 0 5px;
+    font-size: 10px;
+  }
+  .sm-tab--add{
+    width: 26px;
+    height: 26px;
+  }
+  .sm-tab__add-icon{
+    font-size: 15px;
+  }
+}
+
+.sm-tab__input:focus{
+  border-color: rgba(var(--sm-primary), 0.55);
+  box-shadow: inset 0 0 0 1px rgba(var(--sm-primary), 0.20);
+}
+
+
+.sm-tab--add{
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.14);
+  flex: 0 0 auto;
+}
+
+.sm-card-tabs--compact .sm-tab--add{
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+}
+
+.sm-card-tabs--micro .sm-tab--add{
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+}
+
+.sm-tab--add-compact{
+  width: 26px;
+  height: 26px;
+}
+
+.sm-tab--add-micro{
+  width: 22px;
+  height: 22px;
+}
+
+.sm-tab--add-fixed{
+  margin-bottom: 1px;
+}
+
+.sm-card-tabs--compact .sm-tab--add-fixed,
+.sm-card-tabs--micro .sm-tab--add-fixed{
+  margin-bottom: 0;
+}
+
+.sm-tab--add:disabled{
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.sm-tab__add-icon{
+  font-size: 18px;
+  line-height: 1;
+  color: inherit;
+}
+
+.sm-tab--add-compact .sm-tab__add-icon{
+  font-size: 16px;
+}
+
+.sm-tab--add-micro .sm-tab__add-icon{
+  font-size: 14px;
+}
+
+.sm-tooltip{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: none;
+}
+
+.sm-tooltip::after{
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%) rotate(45deg);
+  background: rgba(0, 0, 0, 0.78);
+  border-left: 1px solid rgba(255, 255, 255, 0.10);
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.sm-tooltip__text{
+  font-size: 11px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* -----------------------------
    Glass cards hook (base)
 ------------------------------ */
@@ -669,6 +1106,10 @@ input.ui-input--search:focus-visible{
   border: 1px solid var(--sm-glass-border);
   box-shadow: var(--sm-shadow-card);
   /* will-change removido - não anima mais */
+}
+
+.sm-context-menu{
+  background: rgba(6, 6, 6, 0.92) !important;
 }
 
 /* Smaller glass card for process rows */
