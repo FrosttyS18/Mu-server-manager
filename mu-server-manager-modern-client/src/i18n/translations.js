@@ -201,7 +201,7 @@ export const translations = {
       autoOKActiveInfo: 'Ativo: O sistema clicará automaticamente em caixas de diálogos ao iniciar processos.',
       
       // Version Info
-      version: 'Server Manager v1.0.0',
+      version: 'Server Manager V2.0.0 - Premium',
       developedBy: 'Desenvolvido por Dev-Frostty © 2026',
       
       // Language Change
@@ -599,7 +599,7 @@ export const translations = {
       autoOKActiveInfo: 'Active: The system will automatically click on dialog boxes when starting processes.',
       
       // Version Info
-      version: 'Server Manager v1.0.0',
+      version: 'Server Manager V2.0.0 - Premium',
       developedBy: 'Developed by Dev-Frostty © 2026',
       
       // Language Change
@@ -997,7 +997,7 @@ export const translations = {
       autoOKActiveInfo: 'Activo: El sistema hará clic automáticamente en cuadros de diálogos al iniciar procesos.',
       
       // Version Info
-      version: 'Server Manager v1.0.0',
+      version: 'Server Manager V2.0.0 - Premium',
       developedBy: 'Desarrollado por Dev-Frostty © 2026',
       
       // Language Change

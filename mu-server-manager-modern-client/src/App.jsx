@@ -3105,7 +3105,7 @@ function ConsoleModal({ logs, onClose, onClear, language, handleLanguageChange, 
                   {t('console.appVersion')}
                 </div>
                 <div className="text-[20px] font-semibold text-white">
-                  v1.0.0
+                  V2.0.0 - Premium
                 </div>
                 <div className="text-[13px] text-white/50">
                   MU Server Manager

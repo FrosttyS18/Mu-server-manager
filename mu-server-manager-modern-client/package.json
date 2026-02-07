@@ -1,7 +1,7 @@
 {
   "name": "server-manager",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "MU Server Manager - Gerenciador de servidores MU Online",
   "author": {
     "name": "Dev-Frostty",
@@ -10,11 +10,14 @@
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
+    "generate:icons": "node scripts/generate-icons.mjs",
     "dev": "vite",
     "electron": "wait-on http://localhost:5173 && electron electron/main.cjs",
     "app": "concurrently -k \"npm run dev\" \"npm run electron\"",
     "build": "vite build",
+    "prebuild:electron": "npm run generate:icons",
     "build:electron": "npm run build && electron-builder --win --x64",
+    "prebuild:electron:dir": "npm run generate:icons",
     "build:electron:dir": "npm run build && electron-builder --win --x64 --dir",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
@@ -50,7 +53,9 @@
     "node-addon-api": "^8.5.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
+    "to-ico": "^1.0.1",
     "vite": "^7.2.4",
-    "wait-on": "^9.0.3"
+    "wait-on": "^9.0.3",
+    "sharp": "^0.34.3"
   }
 }

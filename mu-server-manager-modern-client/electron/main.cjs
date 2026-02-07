@@ -23,6 +23,10 @@ const pidusage = require("pidusage");
 let mainWindow = null;
 let splashWindow = null;
 
+const appIconPath = isDev
+  ? path.join(__dirname, "../build/icon.ico")
+  : path.join(process.resourcesPath, "build/icon.ico");
+
 // =========================
 //  Sistema de Logs em Arquivo
 // =========================
@@ -855,6 +859,7 @@ function createSplashWindow() {
     backgroundColor: "#00000000",
     show: false,
     alwaysOnTop: true,
+    icon: appIconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -882,6 +887,7 @@ function createWindow() {
     minHeight: 740,
     title: "Server Manager",
     show: false,
+    icon: appIconPath,
     frame: false, // Remove a barra de título padrão do Windows
     transparent: true, // REATIVADO - Remove contorno do Windows
     backgroundColor: '#00000000', // Totalmente transparente

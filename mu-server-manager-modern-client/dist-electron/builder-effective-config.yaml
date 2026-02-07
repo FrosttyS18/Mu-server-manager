@@ -1,0 +1,48 @@
+directories:
+  output: dist-electron
+  buildResources: build
+appId: com.devfrostty.servermanager.modern
+productName: Server Manager Modern
+copyright: Copyright © 2026 Dev-Frostty
+disableSanityCheckAsar: true
+files:
+  - filter:
+      - dist/**/*
+      - electron/**/*
+      - native/**/*.node
+      - package.json
+      - '!**/*.map'
+      - '!**/*.d.ts'
+      - '!**/{test,__tests__,tests,example,examples,demo,docs,doc}'
+      - '!**/{README.md,CHANGELOG.md,LICENSE,*.txt}'
+      - '!**/.{git,github,DS_Store}'
+asarUnpack:
+  - native/**/*
+win:
+  target:
+    - target: msi
+      arch:
+        - x64
+  icon: build/icon.ico
+  artifactName: ${productName}-${version}-Setup.${ext}
+  sign: false
+  legalTrademarks: Server Manager by Dev-Frostty
+  requestedExecutionLevel: asInvoker
+  verifyUpdateCodeSignature: false
+  signtoolOptions:
+    signingHashAlgorithms:
+      - sha256
+    publisherName: Dev-Frostty
+msi:
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  perMachine: false
+  oneClick: false
+  runAfterFinish: true
+  upgradeCode: B4C7D8E9-F1A2-3B4C-5D6E-7F8A9B0C1D2E
+  warningsAsErrors: false
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+compression: maximum
+publish: null
+electronVersion: 39.2.7
