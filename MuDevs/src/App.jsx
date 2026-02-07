@@ -2,7 +2,7 @@ import React from "react";
 import { Icon } from "./components/Icon";
 import logoSmf from "./assets/Icons/logo_smf.svg";
 import logoMuDevs from "./assets/Icons/logomudevs.webp";
-import { useMetrics, useCrashDetection, LanguageContext, useTranslation } from "./hooks";
+import { useCrashDetection, LanguageContext, useTranslation } from "./hooks";
 import { ConfirmModal, CrashModal } from "./components/Modals";
 import { CustomSelect } from "./components/CustomSelect";
 import { getTranslation } from "./i18n/translations";
@@ -395,42 +395,6 @@ const persistList = React.useCallback((list) => {
     return processes.filter((p) => (p.name ?? "").toLowerCase().includes(q));
   }, [processes, searchQuery]);
 
-  // Função para reordenar array (similar ao moveItemInArray do Angular CDK)
-  const moveItemInArray = React.useCallback((array, previousIndex, currentIndex) => {
-    const result = [...array];
-    const [removed] = result.splice(previousIndex, 1);
-    result.splice(currentIndex, 0, removed);
-    return result;
-  }, []);
-
-  // Handler para drop - reordena a lista completa (não apenas a filtrada)
-  const handleDrop = React.useCallback((previousIndex, currentIndex) => {
-    // Se trabalhar com lista filtrada, precisa mapear índices
-    if (searchQuery.trim()) {
-      // Reordenar na lista filtrada
-      const newList = moveItemInArray(list, previousIndex, currentIndex);
-      
-      // Mapear de volta para a lista completa mantendo os que não estão na lista filtrada
-      setProcesses((prev) => {
-        const listIds = new Set(list.map(p => p.id));
-        const reorderedProcesses = newList.map(p => prev.find(proc => proc.id === p.id)).filter(Boolean);
-        const otherProcesses = prev.filter(p => !listIds.has(p.id));
-        const finalList = [...reorderedProcesses, ...otherProcesses];
-        
-        // Persistir nova ordem
-        persistList(finalList);
-        return finalList;
-      });
-    } else {
-      // Lista não filtrada - reordenar diretamente
-      setProcesses((prev) => {
-        const newProcesses = moveItemInArray(prev, previousIndex, currentIndex);
-        persistList(newProcesses);
-        return newProcesses;
-      });
-    }
-    }, [list, searchQuery, moveItemInArray, persistList]);
-
   // Event listener global para mover o preview com o cursor E reorganizar itens automaticamente
   React.useEffect(() => {
     if (draggedIndex === null || !dragPreviewRef.current) return;
@@ -543,7 +507,7 @@ const persistList = React.useCallback((list) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   
   // startOne precisa ser useCallback porque é passado para useCrashDetection
-  const startOne = React.useCallback(async (id, { hidden = true } = {}) => {
+  const startOne = React.useCallback(async (id) => {
     // USA O REF para pegar o valor ATUAL de processes
     const proc = processesRef.current.find((p) => p.id === id);
     
@@ -622,7 +586,7 @@ const persistList = React.useCallback((list) => {
     setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: false, windowHidden: false } : p)));
   }, [api]);
 
-  const restartOne = React.useCallback(async (id, { hidden = true } = {}) => {
+  const restartOne = React.useCallback(async (id) => {
     const proc = processesRef.current.find((p) => p.id === id);
     if (!proc?.path) return;
 
@@ -665,7 +629,7 @@ const persistList = React.useCallback((list) => {
     }
 
       await stopOne(id);
-      setTimeout(() => startOne(id, { hidden }), 350);
+      setTimeout(() => startOne(id), 350);
     }, [api, autoOKDialogs, startupDelay, stopOne, startOne]);
 
 
@@ -838,7 +802,7 @@ const hideAllWindows = React.useCallback(async () => {
             backupRecurrence: backupRecurrence,
             manualDisconnect: false // Remove flag - conexão manual bem-sucedida
           });
-        } catch (err) {
+        } catch {
           // Silenciosamente falha se não conseguir salvar
         }
         
@@ -852,7 +816,7 @@ const hideAllWindows = React.useCallback(async () => {
             } else {
               setAvailableDatabases([]); // Garante que seja array vazio se falhar
             }
-          } catch (err) {
+          } catch {
             setAvailableDatabases([]); // Garante que seja array vazio se der erro
           } finally {
             setIsLoadingDatabases(false);
@@ -1068,7 +1032,7 @@ const hideAllWindows = React.useCallback(async () => {
                   } else {
                     setAvailableDatabases([]);
                   }
-                } catch (err) {
+                } catch {
                   setAvailableDatabases([]);
                 }
               }
@@ -1200,7 +1164,7 @@ const hideAllWindows = React.useCallback(async () => {
     if (!proc) return;
 
     if (proc.running) await stopOne(id);
-    else await startOne(id, { hidden: true });
+    else await startOne(id);
   };
 
   // SIDEBAR ACTIONS - SIMPLIFICADO: usa processesRef para pegar processos atuais
@@ -1226,7 +1190,7 @@ const hideAllWindows = React.useCallback(async () => {
       
       for (const p of toStart) {
         try {
-          await startOne(p.id, { hidden: true });
+          await startOne(p.id);
           await new Promise(resolve => setTimeout(resolve, 500));
         } catch (err) {
           console.error('[startAll] Erro ao iniciar', p.name, ':', err);
@@ -1318,7 +1282,7 @@ const hideAllWindows = React.useCallback(async () => {
     let successCount = 0;
     for (const p of currentProcesses) {
       try {
-        await startOne(p.id, { hidden: true });
+        await startOne(p.id);
         successCount++;
       } catch (err) {
         addErrorLog('process', t('error.restartError', { name: p.name }) + `: ${err.message}`);
@@ -2086,7 +2050,7 @@ setProcesses(() => {
           onClose={() => setCtxMenu(null)}
           onShow={() => showWindow(ctxMenu.id)}
           onHide={() => hideWindow(ctxMenu.id)}
-          onStart={() => startOne(ctxMenu.id, { hidden: true })}
+          onStart={() => startOne(ctxMenu.id)}
           onStop={() => stopOne(ctxMenu.id)}
           onRestart={() => restartOne(ctxMenu.id)}
         />
@@ -2392,7 +2356,7 @@ setProcesses(() => {
                               } else {
                                 setAvailableDatabases([]);
                               }
-                            } catch (err) {
+                            } catch {
                               setAvailableDatabases([]);
                             } finally {
                               setIsLoadingDatabases(false);
@@ -2442,7 +2406,7 @@ setProcesses(() => {
 }
 
 // Modal Console & Info
-function ConsoleModal({ logs, onClose, onClear, language, setLanguage, handleLanguageChange, autoOKDialogs, setAutoOKDialogs }) {
+function ConsoleModal({ logs, onClose, onClear, language, handleLanguageChange, autoOKDialogs, setAutoOKDialogs }) {
   const [activeTab, setActiveTab] = React.useState('console'); // 'console' | 'info' | 'settings'
   const { t } = useTranslation();
   

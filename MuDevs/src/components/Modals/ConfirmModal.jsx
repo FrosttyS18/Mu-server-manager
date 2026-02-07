@@ -5,7 +5,6 @@ export function ConfirmModal({
   message,
   confirmText,
   cancelText,
-  tone = "danger",
   onCancel,
   onConfirm,
 }) {

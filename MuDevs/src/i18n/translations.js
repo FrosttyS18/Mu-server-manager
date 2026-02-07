@@ -535,7 +535,6 @@ export const translations = {
       englishUS: 'English',
       spanishES: 'Español',
       chineseCN: '中文',
-      chineseCN: '中文',
 
       // Auto OK Section
       autoOKTitle: 'Auto OK on Dialogs',
@@ -908,7 +907,6 @@ export const translations = {
       englishUS: 'English',
       spanishES: 'Español',
       chineseCN: '中文',
-      chineseCN: '中文',
 
       // Auto OK Section
       autoOKTitle: 'Auto OK en Diálogos',
@@ -1280,7 +1278,6 @@ export const translations = {
       portugueseBR: 'Português',
       englishUS: 'English',
       spanishES: 'Español',
-      chineseCN: '中文',
       chineseCN: '中文',
 
       // Auto OK Section
