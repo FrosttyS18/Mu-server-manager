@@ -1168,13 +1168,10 @@ ipcMain.handle("process-start", async (_evt, payload) => {
         });
       } catch {}
     });
-// inicia oculto (estilo SSU)
-    if (hidden) {
-      // dá um tempinho pra janela existir
-      setTimeout(() => {
-        setWindowVisibleByPid(child.pid, false);
-      }, 250);
-    }
+// REMOVIDO: Não oculta mais automaticamente no Electron
+// Deixa o frontend controlar quando ocultar (após o delay para dar tempo do modal)
+// Se ocultar muito rápido (250ms), o modal (janela owned) também é fechado
+// O frontend agora controla isso após o delay apropriado
 
     return { ok: true, pid: child.pid };
   } catch (e) {
@@ -1282,11 +1279,9 @@ ipcMain.handle("process-restart", async (_evt, payload) => {
     } catch {}
   });
 
-  if (hidden) {
-    setTimeout(() => {
-      setWindowVisibleByPid(child.pid, false);
-    }, 250);
-  }
+  // REMOVIDO: Não oculta mais automaticamente no Electron
+  // Deixa o frontend controlar quando ocultar (após o delay para dar tempo do modal)
+  // Se ocultar muito rápido (250ms), o modal (janela owned) também é fechado
 
   return { ok: true, pid: child.pid };
 });
@@ -1550,25 +1545,29 @@ async function cleanupOnExit() {
       console.warn(`  ⚠️ Erro ao remover atalhos globais: ${err.message}`);
     }
     
-    // 6. Fecha e destrói as janelas
+    // 6. Fecha e destrói as janelas FORÇADAMENTE
     console.log('[Cleanup] Passo 6/6: Fechando janelas...');
     if (splashWindow && !splashWindow.isDestroyed()) {
       try {
-        splashWindow.close();
+        splashWindow.removeAllListeners();
+        splashWindow.destroy();
         splashWindow = null;
-        console.log('  ✅ Splash window fechada');
+        console.log('  ✅ Splash window destruída');
       } catch (err) {
-        console.warn(`  ⚠️ Erro ao fechar splash window: ${err.message}`);
+        console.warn(`  ⚠️ Erro ao destruir splash window: ${err.message}`);
+        splashWindow = null;
       }
     }
     
     if (mainWindow && !mainWindow.isDestroyed()) {
       try {
-        mainWindow.close();
+        mainWindow.removeAllListeners();
+        mainWindow.destroy();
         mainWindow = null;
-        console.log('  ✅ Main window fechada');
+        console.log('  ✅ Main window destruída');
       } catch (err) {
-        console.warn(`  ⚠️ Erro ao fechar main window: ${err.message}`);
+        console.warn(`  ⚠️ Erro ao destruir main window: ${err.message}`);
+        mainWindow = null;
       }
     }
     

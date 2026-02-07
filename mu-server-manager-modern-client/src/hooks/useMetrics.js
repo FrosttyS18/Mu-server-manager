@@ -7,16 +7,15 @@ export function useMetrics() {
     processes: []
   });
 
-  const api = typeof window !== 'undefined' ? window.mu : {};
-
   // Listener para receber atualizações de métricas (a cada 4 segundos)
   React.useEffect(() => {
-    if (typeof api.onMetricsUpdate !== 'function') return;
-    
+    const api = typeof window !== 'undefined' ? window.mu : undefined;
+    if (typeof api?.onMetricsUpdate !== 'function') return;
+
     return api.onMetricsUpdate((metricsData) => {
       setMetrics(metricsData);
     });
-  }, [api]);
+  }, []);
 
   // Formatar memória
   const formatMemory = React.useCallback((bytes) => {

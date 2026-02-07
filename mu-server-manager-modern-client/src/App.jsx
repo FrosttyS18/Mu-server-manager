@@ -1,7 +1,7 @@
 import React from "react";
 import { Icon } from "./components/Icon";
 import logoSmf from "./assets/Icons/logo_smf.svg";
-import { useMetrics, useCrashDetection, LanguageContext, useTranslation } from "./hooks";
+import { useCrashDetection, LanguageContext, useTranslation } from "./hooks";
 import { ConfirmModal, CrashModal } from "./components/Modals";
 import { CustomSelect } from "./components/CustomSelect";
 import { getTranslation } from "./i18n/translations";
@@ -14,6 +14,8 @@ const IS_ADMIN_VERSION = true; // VERSÃO ADMIN - auto-click ativo
 // Tempo padrão (ms) para deixar o executável VISÍVEL após o start.
 // Isso dá tempo de clicar no modal "OK" (MUDEVS) antes do app ocultar a janela.
 const DEFAULT_STARTUP_DELAY_MS = 3500;
+
+const ESSENTIAL_PROCESSES = ['ConnectServer.exe', 'DataServer.exe', 'GameServer.exe', 'JoinServer.exe'];
 
 // Sidebar / Branding (persistente no localStorage)
 const STORAGE_KEYS = {
@@ -50,6 +52,11 @@ export default function App() {
   const t = React.useCallback((key, params = {}) => {
     return getTranslation(language, key, params);
   }, [language]);
+
+  const tRef = React.useRef(t);
+  React.useEffect(() => {
+    tRef.current = t;
+  }, [t]);
   
   // REF para sempre ter acesso aos processos atuais
   const processesRef = React.useRef(processes);
@@ -382,7 +389,7 @@ const persistList = React.useCallback((list) => {
   }, []);
 
   // Handler para drop - reordena a lista completa (não apenas a filtrada)
-  const handleDrop = React.useCallback((previousIndex, currentIndex) => {
+  const _handleDrop = React.useCallback((previousIndex, currentIndex) => {
     // Se trabalhar com lista filtrada, precisa mapear índices
     if (searchQuery.trim()) {
       // Reordenar na lista filtrada
@@ -509,6 +516,11 @@ const persistList = React.useCallback((list) => {
     setTimeout(() => setToast(null), 4000); // Auto-hide após 4s
   }, []);
 
+  const showToastRef = React.useRef(showToast);
+  React.useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
+
   // Função para mudar idioma com toast
   const handleLanguageChange = React.useCallback((newLanguage) => {
     setLanguage(newLanguage);
@@ -518,10 +530,10 @@ const persistList = React.useCallback((list) => {
   }, [showToast]);
 
   // ===== Electron runtime API (start/stop/show/hide) =====
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const sleep = React.useCallback((ms) => new Promise((r) => setTimeout(r, ms)), []);
   
   // startOne precisa ser useCallback porque é passado para useCrashDetection
-  const startOne = React.useCallback(async (id, { hidden = true } = {}) => {
+  const startOne = React.useCallback(async (id) => {
     // USA O REF para pegar o valor ATUAL de processes
     const proc = processesRef.current.find((p) => p.id === id);
     
@@ -572,14 +584,7 @@ const persistList = React.useCallback((list) => {
       }
     }
 
-    // 3) Se você quiser iniciar oculto, esperamos um pouco antes de dar HIDE
-    if (hidden) {
-      const delay = Number(proc.delayMs ?? DEFAULT_STARTUP_DELAY_MS);
-      if (delay > 0) await sleep(delay);
-      await api.hideProcessWindow?.(id);
-      setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, windowHidden: true } : p)));
-    }
-  }, [api, showToast, autoOKDialogs]); // Adicionar autoOKDialogs nas dependencies
+  }, [api, showToast, autoOKDialogs, t, sleep]);
 
   const stopOne = React.useCallback(async (id) => {
     const proc = processesRef.current.find((p) => p.id === id);
@@ -598,7 +603,7 @@ const persistList = React.useCallback((list) => {
     setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: false, windowHidden: false } : p)));
   }, [api]);
 
-  const restartOne = React.useCallback(async (id, { hidden = true } = {}) => {
+  const restartOne = React.useCallback(async (id) => {
     const proc = processesRef.current.find((p) => p.id === id);
     if (!proc?.path) return;
 
@@ -629,18 +634,12 @@ const persistList = React.useCallback((list) => {
         }
       }
 
-      if (hidden) {
-        const delay = Number(proc.delayMs ?? DEFAULT_STARTUP_DELAY_MS);
-        if (delay > 0) await sleep(delay);
-        await api.hideProcessWindow?.(id);
-        setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, windowHidden: true } : p)));
-      }
       return;
     }
 
     await stopOne(id);
-    setTimeout(() => startOne(id, { hidden }), 350);
-  }, [api, autoOKDialogs]); // Adicionar autoOKDialogs nas dependencies
+    setTimeout(() => startOne(id), 350);
+  }, [api, autoOKDialogs, startOne, stopOne, sleep]);
 
 
 const showWindow = React.useCallback(async (id) => {
@@ -667,7 +666,7 @@ const hideWindow = React.useCallback(async (id) => {
     for (const p of currentProcesses) {
       if (p.running) await showWindow(p.id);
     }
-  }, [api]); // NÃO incluir showWindow para evitar dependências circulares
+  }, [api, showWindow]);
 
 const hideAllWindows = React.useCallback(async () => {
   // não existe handler "hide all" no backend, então fazemos via loop
@@ -676,7 +675,7 @@ const hideAllWindows = React.useCallback(async () => {
   for (const p of currentProcesses) {
     if (p.running) await hideWindow(p.id);
   }
-}, []); // NÃO incluir hideWindow para evitar dependências circulares
+}, [hideWindow]);
 
 
   // ===== Context Menu (botão direito no processo) =====
@@ -733,6 +732,11 @@ const hideAllWindows = React.useCallback(async () => {
       });
     }
   }, [MAX_LOGS]);
+
+  const addErrorLogRef = React.useRef(addErrorLog);
+  React.useEffect(() => {
+    addErrorLogRef.current = addErrorLog;
+  }, [addErrorLog]);
 
   const clearLogs = () => setConsoleLogs([]);
 
@@ -812,7 +816,7 @@ const hideAllWindows = React.useCallback(async () => {
             backupRecurrence: backupRecurrence,
             manualDisconnect: false // Remove flag - conexão manual bem-sucedida
           });
-        } catch (err) {
+        } catch {
           // Silenciosamente falha se não conseguir salvar
         }
         
@@ -826,7 +830,7 @@ const hideAllWindows = React.useCallback(async () => {
             } else {
               setAvailableDatabases([]); // Garante que seja array vazio se falhar
             }
-          } catch (err) {
+          } catch {
             setAvailableDatabases([]); // Garante que seja array vazio se der erro
           } finally {
             setIsLoadingDatabases(false);
@@ -894,7 +898,7 @@ const hideAllWindows = React.useCallback(async () => {
     }
   };
 
-  const handleSqlBackup = async () => {
+  const handleSqlBackup = React.useCallback(async () => {
     if (!sqlConnected) {
       showToast(t('sql.configFirst'), 'warning');
       return;
@@ -955,7 +959,7 @@ const hideAllWindows = React.useCallback(async () => {
         showToast(result.error, 'error');
       }
     }
-  };
+  }, [addErrorLog, availableDatabases, backupPath, showToast, sqlConnected, sqlDatabase, sqlType, t]);
 
   // Carregar configurações SQL ao iniciar
   const hasAttemptedAutoConnect = React.useRef(false);
@@ -967,7 +971,10 @@ const hideAllWindows = React.useCallback(async () => {
         return;
       }
       
-      const config = await window.mu.sqlLoadConfig();
+      const mu = window.mu;
+      if (typeof mu?.sqlLoadConfig !== 'function') return;
+
+      const config = await mu.sqlLoadConfig();
       
       if (config) {
         setSqlType(config.type || 'sqlserver');
@@ -1031,7 +1038,7 @@ const hideAllWindows = React.useCallback(async () => {
             if (result && result.ok) {
               // SUCESSO
               setSqlConnected(true);
-              showToast(t('sql.connectSuccess'), 'success');
+              showToastRef.current(tRef.current('sql.connectSuccess'), 'success');
               
               // Buscar lista de databases disponíveis
               if (window.mu?.sqlListDatabases) {
@@ -1042,7 +1049,7 @@ const hideAllWindows = React.useCallback(async () => {
                   } else {
                     setAvailableDatabases([]);
                   }
-                } catch (err) {
+                } catch {
                   setAvailableDatabases([]);
                 }
               }
@@ -1052,13 +1059,16 @@ const hideAllWindows = React.useCallback(async () => {
               setAutoConnectFailedModal(true);
               // ADICIONA LOG DE ERRO
               const errorMsg = result?.error || 'Falha na conexão automática';
-              addErrorLog(config.type === 'mysql' ? 'mysql' : 'sql-server', `${t('error.autoConnectFailed_log')}: ${errorMsg}`);
+              addErrorLogRef.current(
+                config.type === 'mysql' ? 'mysql' : 'sql-server',
+                `${tRef.current('error.autoConnectFailed_log')}: ${errorMsg}`
+              );
             }
           }, 4500); // Aguarda 4.5 segundos (splash de 4s + 500ms de margem)
         } else if (config.server) {
           // Só mostra "desconectado" se tem config mas NÃO tem credenciais completas (não tentou conectar)
           setTimeout(() => {
-            showToast(t('sql.dbOfflineMsg'), 'info');
+            showToastRef.current(tRef.current('sql.dbOfflineMsg'), 'info');
           }, 3000);
         }
       }
@@ -1117,7 +1127,7 @@ const hideAllWindows = React.useCallback(async () => {
     }, 60000); // Verifica a cada 1 minuto
 
     return () => clearInterval(checkBackup);
-  }, [nextBackupDate, sqlConnected, backupPath, backupRecurrence, sqlType, sqlServer, sqlUser, sqlPassword, sqlDatabase, sqlPort]);
+  }, [nextBackupDate, sqlConnected, backupPath, backupRecurrence, sqlType, sqlServer, sqlUser, sqlPassword, sqlDatabase, sqlPort, handleSqlBackup]);
 
   React.useEffect(() => {
     if (!ctxMenu) return;
@@ -1217,7 +1227,7 @@ const hideAllWindows = React.useCallback(async () => {
     } finally {
       setIsStartingAll(false);
     }
-  }, [isStartingAll, showToast, startOne]);
+  }, [isStartingAll, showToast, startOne, t]);
 
   const stopAll = React.useCallback(async () => {
     const currentProcesses = processesRef.current;
@@ -1250,7 +1260,7 @@ const hideAllWindows = React.useCallback(async () => {
       ? `${toStop.length} ${t('toast.processesStopped_count')}.`
       : `${toStop.length} ${t('toast.processStopped_count')}.`;
     showToast(msg, 'success');
-  }, [confirmDialog, showToast, addErrorLog, stopOne]);
+  }, [confirmDialog, showToast, addErrorLog, stopOne, t]);
 
   const restartAll = React.useCallback(async () => {
     if (isRestartingAll) return;
@@ -1304,7 +1314,7 @@ const hideAllWindows = React.useCallback(async () => {
       : `${successCount} ${t('toast.processRestarted_count')}.`;
     showToast(msg, 'success');
     setIsRestartingAll(false);
-  }, [isRestartingAll, confirmDialog, showToast, addErrorLog, stopOne, startOne]);
+  }, [isRestartingAll, confirmDialog, showToast, addErrorLog, stopOne, startOne, t, sleep]);
 
   // ============================================
   // CRASH DETECTION & AUTO-RESTART SYSTEM (usando hook)
@@ -1334,7 +1344,10 @@ const hideAllWindows = React.useCallback(async () => {
         if (crashed && !wasManualStop) {
           const processName = updatedProcesses.find(p => p.id === id)?.name || id;
           const detectionMethod = detectedByWatchdog ? 'watchdog' : 'exit event';
-          addErrorLog('process', t('error.processCrashed', { name: processName, code: exitCode, method: detectionMethod }));
+          addErrorLogRef.current(
+            'process',
+            tRef.current('error.processCrashed', { name: processName, code: exitCode, method: detectionMethod })
+          );
           
           console.log('[App] Chamando handleProcessCrash para:', id);
           // Chama handleProcessCrash após o setState para garantir que o estado está atualizado
@@ -1344,7 +1357,7 @@ const hideAllWindows = React.useCallback(async () => {
         return updatedProcesses;
       });
     });
-  }, [api, handleProcessCrash, addErrorLog]);
+  }, [api, handleProcessCrash]);
 
   const addProcess = async () => {
   // Electron: abre seletor de .exe
@@ -1441,11 +1454,9 @@ setProcesses(() => {
   const allWindowsVisible = runningProcs.length > 0 && runningProcs.every((p) => !p.windowHidden);
 
   // Sistema de status inteligente baseado em processos essenciais
-  const essentialProcesses = ['ConnectServer.exe', 'DataServer.exe', 'GameServer.exe', 'JoinServer.exe'];
-  
   const getServerStatus = React.useMemo(() => {
     const runningEssentials = processes.filter(p => 
-      p.running && essentialProcesses.some(essential => 
+      p.running && ESSENTIAL_PROCESSES.some(essential => 
         p.name.toLowerCase() === essential.toLowerCase()
       )
     );
@@ -2359,7 +2370,7 @@ setProcesses(() => {
                               } else {
                                 setAvailableDatabases([]);
                               }
-                            } catch (err) {
+                            } catch {
                               setAvailableDatabases([]);
                             } finally {
                               setIsLoadingDatabases(false);
@@ -2409,7 +2420,7 @@ setProcesses(() => {
 }
 
 // Modal Console & Info
-function ConsoleModal({ logs, onClose, onClear, language, setLanguage, handleLanguageChange, autoOKDialogs, setAutoOKDialogs }) {
+function ConsoleModal({ logs, onClose, onClear, language, handleLanguageChange, autoOKDialogs, setAutoOKDialogs }) {
   const [activeTab, setActiveTab] = React.useState('console'); // 'console' | 'info' | 'settings'
   const { t } = useTranslation();
   

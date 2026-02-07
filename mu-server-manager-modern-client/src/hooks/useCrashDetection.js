@@ -15,6 +15,7 @@ export function useCrashDetection(processes, startOne, showToast) {
   const crashQueueRef = React.useRef([]); // Usar ref ao invés de state para fila
   const recentCrashesRef = React.useRef(new Map()); // Debounce para evitar dupla detecção
   const sessionCountdownTimeRef = React.useRef(CRASH_COUNTDOWN_SECONDS); // Countdown fixo para toda a sessão
+  const startCrashCountdownInternalRef = React.useRef(null);
   
   // Usar ref para sempre ter acesso aos processos atualizados
   const processesRef = React.useRef(processes);
@@ -62,9 +63,9 @@ export function useCrashDetection(processes, startOne, showToast) {
     console.log('[CrashDetection] Processando próximo da fila:', nextCrash.processName, '- Restantes na fila:', queue.length);
     
     // Inicia o countdown para o próximo crash
-    startCrashCountdownInternal(
-      nextCrash.processId, 
-      nextCrash.processName, 
+    startCrashCountdownInternalRef.current?.(
+      nextCrash.processId,
+      nextCrash.processName,
       nextCrash.attemptNumber,
       nextCrash.needsManualIntervention
     );
@@ -137,6 +138,10 @@ export function useCrashDetection(processes, startOne, showToast) {
       }
     }, 1000);
   }, [attemptAutoRestart, processNextInQueue]);
+
+  React.useEffect(() => {
+    startCrashCountdownInternalRef.current = startCrashCountdownInternal;
+  }, [startCrashCountdownInternal]);
 
   const handleProcessCrash = React.useCallback((processId) => {
     console.log('[CrashDetection] Crash detectado para:', processId);

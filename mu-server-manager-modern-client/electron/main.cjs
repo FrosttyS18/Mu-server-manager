@@ -900,9 +900,6 @@ function createWindow() {
   
   if (isDev) {
     mainWindow.loadURL("http://localhost:5173/");
-    // Abre DevTools em desenvolvimento
-    mainWindow.webContents.openDevTools();
-    
     // Atalho para abrir/fechar DevTools: Ctrl+Shift+D
     globalShortcut.register('CommandOrControl+Shift+D', () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1170,13 +1167,6 @@ ipcMain.handle("process-start", async (_evt, payload) => {
         });
       } catch {}
     });
-// inicia oculto (estilo SSU)
-    if (hidden) {
-      // dá um tempinho pra janela existir
-      setTimeout(() => {
-        setWindowVisibleByPid(child.pid, false);
-      }, 250);
-    }
 
     return { ok: true, pid: child.pid };
   } catch (e) {
@@ -1283,12 +1273,6 @@ ipcMain.handle("process-restart", async (_evt, payload) => {
       });
     } catch {}
   });
-
-  if (hidden) {
-    setTimeout(() => {
-      setWindowVisibleByPid(child.pid, false);
-    }, 250);
-  }
 
   return { ok: true, pid: child.pid };
 });
@@ -1556,21 +1540,25 @@ async function cleanupOnExit() {
     console.log('[Cleanup] Passo 6/6: Fechando janelas...');
     if (splashWindow && !splashWindow.isDestroyed()) {
       try {
-        splashWindow.close();
+        splashWindow.removeAllListeners();
+        splashWindow.destroy();
         splashWindow = null;
-        console.log('  ✅ Splash window fechada');
+        console.log('  ✅ Splash window destruída');
       } catch (err) {
-        console.warn(`  ⚠️ Erro ao fechar splash window: ${err.message}`);
+        console.warn(`  ⚠️ Erro ao destruir splash window: ${err.message}`);
+        splashWindow = null;
       }
     }
     
     if (mainWindow && !mainWindow.isDestroyed()) {
       try {
-        mainWindow.close();
+        mainWindow.removeAllListeners();
+        mainWindow.destroy();
         mainWindow = null;
-        console.log('  ✅ Main window fechada');
+        console.log('  ✅ Main window destruída');
       } catch (err) {
-        console.warn(`  ⚠️ Erro ao fechar main window: ${err.message}`);
+        console.warn(`  ⚠️ Erro ao destruir main window: ${err.message}`);
+        mainWindow = null;
       }
     }
     

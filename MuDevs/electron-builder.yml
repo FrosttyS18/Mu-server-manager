@@ -5,7 +5,7 @@ disableSanityCheckAsar: true
 
 # Diretórios
 directories:
-  output: Admin
+  output: dist-electron
   buildResources: build
 
 # Arquivos a incluir no build (otimizado - apenas produção)
@@ -31,9 +31,6 @@ asarUnpack:
 win:
   target:
     - target: msi
-      arch:
-        - x64
-    - target: portable
       arch:
         - x64
   icon: build/icon.ico

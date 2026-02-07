@@ -1,6 +1,6 @@
 /**
  * Sistema de Traduções - MU Server Manager
- * Suporta: PT-BR, EN-US, ES-ES
+ * Suporta: PT-BR, EN-US, ES-ES, ZH-CN
  */
 
 export const translations = {
@@ -162,6 +162,7 @@ export const translations = {
       portugueseBR: 'Português',
       englishUS: 'English',
       spanishES: 'Español',
+      chineseCN: '中文',
 
       // Auto OK Section
       autoOKTitle: 'Auto OK em Diálogos',
@@ -169,6 +170,11 @@ export const translations = {
       autoOKLabel: 'Auto-click em caixas de diálogos com OK',
       autoOKHelp: 'Detecta e clica automaticamente no botão OK dos executáveis',
       autoOKActiveInfo: 'Ativo: O sistema clicará automaticamente em caixas de diálogos ao iniciar processos.',
+      
+      // Startup Delay Section
+      startupDelayTitle: 'Delay de Inicialização',
+      startupDelayLabel: 'Tempo de espera antes de ocultar janelas',
+      startupDelayHelp: 'Ajuste o tempo de espera (2-5 segundos) para dar tempo de clicar no OK dos diálogos dos executáveis',
       
       // Version Info
       version: 'Server Manager v1.0.0',
@@ -366,6 +372,7 @@ export const translations = {
       on: 'Ligado',
       off: 'Desligado',
       footerCredits: 'Dev-Frostty © todos os direitos reservados 2026',
+      imageTooLarge: 'Imagem muito grande. Use uma imagem de até 5MB.',
     },
   },
 
@@ -527,6 +534,8 @@ export const translations = {
       portugueseBR: 'Português',
       englishUS: 'English',
       spanishES: 'Español',
+      chineseCN: '中文',
+      chineseCN: '中文',
 
       // Auto OK Section
       autoOKTitle: 'Auto OK on Dialogs',
@@ -534,6 +543,11 @@ export const translations = {
       autoOKLabel: 'Auto-click on dialog boxes with OK',
       autoOKHelp: 'Detects and automatically clicks the OK button on executables',
       autoOKActiveInfo: 'Active: The system will automatically click on dialog boxes when starting processes.',
+      
+      // Startup Delay Section
+      startupDelayTitle: 'Startup Delay',
+      startupDelayLabel: 'Wait time before hiding windows',
+      startupDelayHelp: 'Adjust the wait time (2-5 seconds) to allow time to click OK on executable dialogs',
       
       // Version Info
       version: 'Server Manager v1.0.0',
@@ -731,6 +745,7 @@ export const translations = {
       on: 'On',
       off: 'Off',
       footerCredits: 'Dev-Frostty © All rights reserved 2026',
+      imageTooLarge: 'Image too large. Use an image up to 5MB.',
     },
   },
 
@@ -892,6 +907,8 @@ export const translations = {
       portugueseBR: 'Português',
       englishUS: 'English',
       spanishES: 'Español',
+      chineseCN: '中文',
+      chineseCN: '中文',
 
       // Auto OK Section
       autoOKTitle: 'Auto OK en Diálogos',
@@ -899,6 +916,11 @@ export const translations = {
       autoOKLabel: 'Auto-clic en cuadros de diálogos con OK',
       autoOKHelp: 'Detecta y hace clic automáticamente en el botón OK de los ejecutables',
       autoOKActiveInfo: 'Activo: El sistema hará clic automáticamente en cuadros de diálogos al iniciar procesos.',
+      
+      // Startup Delay Section
+      startupDelayTitle: 'Retraso de Inicio',
+      startupDelayLabel: 'Tiempo de espera antes de ocultar ventanas',
+      startupDelayHelp: 'Ajuste el tiempo de espera (2-5 segundos) para dar tiempo de hacer clic en OK en los diálogos de los ejecutables',
       
       // Version Info
       version: 'Server Manager v1.0.0',
@@ -1096,13 +1118,387 @@ export const translations = {
       on: 'Encendido',
       off: 'Apagado',
       footerCredits: 'Dev-Frostty © Todos los derechos reservados 2026',
+      imageTooLarge: 'Imagen muy grande. Use una imagen de hasta 5MB.',
+    },
+  },
+
+  'zh-CN': {
+    // Sidebar
+    sidebar: {
+      serverName: '新名称',
+      serverNamePlaceholder: '输入服务器名称',
+      statusServer: '服务器状态',
+      statusOnline: '在线',
+      statusOffline: '离线',
+      statusWarning: '警告',
+      addProcess: '添加',
+      startAll: '全部启动',
+      stopAll: '全部停止',
+      restartAll: '全部重启',
+      removeChecked: '移除已选',
+      clearAll: '清空全部',
+      showAll: '显示全部',
+      hideAll: '隐藏全部',
+    },
+
+    // Header / Main
+    header: {
+      processes: '进程',
+      settings: '设置',
+      search: '搜索进程...',
+    },
+
+    // Process Actions
+    process: {
+      start: '启动',
+      stop: '停止',
+      restart: '重启',
+      running: '运行中',
+      stopped: '已停止',
+      cpu: 'CPU',
+      ram: '内存',
+      pid: 'PID',
+      status: '状态',
+      name: '名称',
+      path: '路径',
+    },
+
+    // Toasts / Notifications
+    toast: {
+      processStarted: '进程已启动',
+      processStopped: '进程已停止',
+      processRestarted: '进程已重启',
+      allStarted: '所有进程已启动',
+      allStopped: '所有进程已停止',
+      allRestarted: '所有进程已重启',
+      processAdded: '进程已添加',
+      processRemoved: '进程已移除',
+      processesRemoved: '个进程已移除',
+      allProcessesCleared: '所有进程已清空',
+      error: '错误',
+      success: '成功',
+      warning: '警告',
+      backupSuccess: '备份成功',
+      backupError: '备份失败',
+      connected: '已连接',
+      disconnected: '已断开',
+      sqlConnected: 'SQL Server 已连接',
+      mysqlConnected: 'MySQL 已连接',
+      connectionError: '连接错误',
+      settingsSaved: '设置已保存',
+      // Process Actions
+      errorStarting: '启动错误',
+      unknownError: '未知错误',
+      noProcessToStart: '没有要启动的进程。',
+      allProcessesRunning: '所有进程已在运行。',
+      processStarted_count: '个进程已启动',
+      processesStarted_count: '个进程已启动',
+      genericError: '错误',
+      noProcessRunning: '没有正在运行的进程。',
+      processStopped_count: '个进程已停止',
+      processesStopped_count: '个进程已停止',
+      noProcessInList: '列表中没有进程。',
+      processRestarted_count: '个进程已重启',
+      processesRestarted_count: '个进程已重启',
+      // Backup
+      backupSuccess_count: '成功备份 {count} 个数据库！',
+      backupSuccess_multiple: '成功备份 {count} 个数据库！',
+      backupPartial: '部分备份：{success} 成功，{fail} 失败。',
+      backupFailed: '备份数据库失败。',
+      backupSingleSuccess: '备份成功！',
+    },
+
+    // Crash Detection Modal
+    crash: {
+      title: '进程意外终止',
+      detected: '检测到意外终止',
+      autoRestart: '自动重启中，倒计时',
+      seconds: '秒',
+      attempt: '尝试',
+      of: '/',
+      queueInfo: '在队列中',
+      inQueue: '在队列中',
+      cancel: '取消',
+      restartNow: '立即重启',
+      tryAgain: '仍然尝试重启',
+      skip: '跳过并继续',
+      cancelAll: '取消全部',
+      manualIntervention: '需要手动干预',
+      maxAttemptsReached: '已达到最大自动尝试次数。',
+      whatToDo: '您想要做什么？',
+      processTerminated: '进程 {processName} 已终止。',
+      processFailed: '进程 {processName} 在过去 2 分钟内连续失败 {maxAttempts} 次。',
+      checkExecutable: '请检查可执行文件或其依赖项是否有问题，然后再尝试重启。',
+      attemptLabel: '尝试',
+      autoRestartIn: '自动重启倒计时',
+      processInQueue: '个进程在队列中',
+      processesInQueue: '个进程在队列中',
+      clickToCancel: '点击取消或等待',
+      cancelAutoRestart: '取消自动重启',
+    },
+
+    // Confirm Modal
+    confirm: {
+      title: '确认',
+      areYouSure: '您确定吗？',
+      confirm: '确认',
+      cancel: '取消',
+      yes: '是',
+      no: '否',
+    },
+
+    // Console Modal
+    console: {
+      title: '控制台日志',
+      tabErrors: '错误控制台',
+      tabInfo: '信息',
+      tabSettings: '设置',
+      noErrors: '没有注册的错误',
+      errorsRegistered: '个错误已注册',
+      noErrorsDetected: '未检测到错误',
+      errorsWillAppear: '错误将显示在此处',
+      clearLogs: '清空控制台',
+      close: '关闭',
+      typeProcess: '进程',
+      typeSqlServer: 'SQL Server',
+      typeMysql: 'MySQL',
+      typeSystem: '系统',
+      appVersion: '应用程序版本',
+      developer: '开发者',
+      copyright: '© 2026 版权所有',
+      disclaimer: '免责声明',
+      disclaimerText: '专为 MU Online 社区开发',
+    },
+
+    // Settings / Configuration
+    settings: {
+      title: '设置',
+      
+      // Language Section
+      languageTitle: '语言 / Language',
+      languageDescription: '选择应用程序界面语言',
+      portugueseBR: 'Português',
+      englishUS: 'English',
+      spanishES: 'Español',
+      chineseCN: '中文',
+      chineseCN: '中文',
+
+      // Auto OK Section
+      autoOKTitle: '对话框自动确认',
+      autoOKDescription: '启动进程时自动点击 MUDevs 对话框中的"确定"',
+      autoOKLabel: '自动点击带"确定"的对话框',
+      autoOKHelp: '检测并自动点击可执行文件的确定按钮',
+      autoOKActiveInfo: '已激活：系统将在启动进程时自动点击对话框。',
+      
+      // Startup Delay Section
+      startupDelayTitle: '启动延迟',
+      startupDelayLabel: '隐藏窗口前的等待时间',
+      startupDelayHelp: '调整等待时间（2-5 秒）以便有时间点击可执行文件对话框中的确定',
+      
+      // Version Info
+      version: 'Server Manager v1.0.0',
+      developedBy: '由 Dev-Frostty 开发 © 2026',
+      
+      // Language Change
+      languageChanged: '语言已更改为中文',
+    },
+
+    // Backup Modal
+    backup: {
+      title: 'SQL 设置',
+      close: '关闭',
+      save: '保存',
+      cancel: '取消',
+      
+      // Database Type
+      dbTypeTitle: '数据库类型',
+      sqlServer: 'SQL Server',
+      mysql: 'MySQL',
+      
+      // Connection
+      connectionTitle: '连接',
+      host: '主机',
+      port: '端口',
+      user: '用户',
+      password: '密码',
+      database: '数据库',
+      testConnection: '测试连接',
+      connected: '已连接',
+      disconnected: '已断开',
+      
+      // Backup Options
+      databaseLabel: '要备份的数据库',
+      allDatabases: '✓ 全部（备份所有数据库）',
+      backupAllHelp: '将备份所有数据库',
+      backupSingleHelp: '将要备份的数据库',
+      backupPath: '备份文件夹',
+      browse: '浏览',
+      selectFolder: '选择文件夹',
+      noFolderSelected: '未选择文件夹',
+      
+      // Schedule
+      scheduleTitle: '下一个计划备份',
+      setDate: '设置日期',
+      confirmDate: '确认',
+      cancelDate: '取消',
+      dateLabel: '日期',
+      timeLabel: '时间',
+      scheduleHelp: '设置下一个自动备份的日期和时间',
+      noDateSet: '未设置日期',
+      
+      // Recurrence
+      recurrenceTitle: '备份重复',
+      recurrenceNone: '无（已禁用）',
+      recurrenceOnce: '一次',
+      recurrenceDaily: '每天',
+      recurrenceWeekly: '每周',
+      recurrenceMonthly: '每月',
+      recurrenceNoneHelp: '自动备份已禁用',
+      recurrenceOnceHelp: '备份将在设定日期仅运行一次',
+      recurrenceDailyHelp: '备份将在设定时间每天运行',
+      recurrenceWeeklyHelp: '备份将在同一天同一时间每周运行',
+      recurrenceMonthlyHelp: '备份将在同一天同一时间每月运行',
+      
+      // Actions
+      backupNow: '立即备份',
+      
+      // Warnings
+      dbDisconnected: '数据库已断开',
+      dbDisconnectedHelp: '连接到数据库以执行备份。设置将被保存，但只有在数据库连接时才会执行。',
+    },
+
+    // Metrics
+    metrics: {
+      totalCPU: '总 CPU',
+      totalRAM: '总内存',
+      sqlServerConnection: 'SQL Server 连接',
+      processes: '个进程',
+      active: '活跃',
+    },
+
+    // SQL
+    sql: {
+      title: 'SQL Server 连接',
+      connect: '连接',
+      disconnect: '断开',
+      connected: '已连接',
+      disconnected: '已断开',
+      online: '在线',
+      offline: '离线',
+      serverPlaceholder: '输入服务器名称',
+      userPlaceholder: '用户',
+      passwordPlaceholder: '输入密码',
+      portPlaceholder: '端口',
+      connecting: '连接中',
+      connectSuccess: '数据库连接成功！',
+      disconnectSuccess: '数据库已断开',
+      connectError: '连接错误',
+      fillAllFields: '请填写所有连接字段！',
+      fillPort: '请填写端口字段以连接',
+      invalidPort: '端口无效！请输入 1 到 65535 之间的数字',
+      autoConnectFailed: '自动连接失败',
+      tryAgain: '重试',
+      configFirst: '配置凭据',
+      dbOfflineMsg: '数据库已断开。连接以执行备份。',
+      configSaved: '设置保存成功！',
+      configSavedConnect: '设置已保存！连接到数据库以激活',
+      configSaveError: '保存设置时出错！',
+      autoConnectFailedMsg: '2 次尝试后无法连接到数据库。',
+      possibleCauses: '可能的原因：',
+      causeDbOff: '数据库已关闭',
+      causeNetwork: '服务器在网络上不可访问',
+      causeCredentials: '凭据已更改',
+      verifyCredentials: '请检查凭据并重试。',
+      checkCredentials: '检查凭据',
+      server: '服务器',
+      user: '用户',
+      password: '密码',
+      port: '端口',
+      type: '类型',
+    },
+
+    // Context Menu
+    contextMenu: {
+      start: '启动',
+      stop: '停止',
+      restart: '重启',
+      show: '显示窗口',
+      hide: '隐藏窗口',
+      remove: '移除',
+      edit: '编辑',
+      properties: '属性',
+    },
+
+    // Dialogs
+    dialog: {
+      selectExecutable: '选择可执行文件',
+      selectFolder: '选择文件夹',
+      exeFiles: '可执行文件',
+      allFiles: '所有文件',
+    },
+
+    // Errors
+    error: {
+      processNotFound: '未找到进程',
+      failedToStart: '启动进程失败',
+      failedToStop: '停止进程失败',
+      failedToRestart: '重启进程失败',
+      invalidPath: '路径无效',
+      invalidName: '名称无效',
+      connectionFailed: '连接失败',
+      backupFailed: '备份失败',
+      unknown: '未知错误',
+      // Error Logs
+      backupError: '备份 {db} 失败',
+      backupException: '备份 {db} 失败',
+      backupSingleError: '备份失败',
+      autoConnectFailed_log: '自动连接失败',
+      stopError: '停止 {name} 时出错',
+      restartError: '重启 {name} 时出错',
+      processCrashed: '进程 {name} 意外停止',
+    },
+
+    // Undo
+    undo: {
+      action: '撤销',
+      processRemoved: '进程已移除',
+      processesRemoved: '个进程已移除',
+      allCleared: '列表已清空',
+    },
+
+    // Common
+    common: {
+      loading: '启动中...',
+      saving: '保存中...',
+      processing: '处理中...',
+      done: '完成',
+      ok: '确定',
+      cancel: '取消',
+      close: '关闭',
+      save: '保存',
+      delete: '删除',
+      edit: '编辑',
+      add: '添加',
+      remove: '移除',
+      search: '搜索',
+      filter: '筛选',
+      all: '全部',
+      none: '无',
+      yes: '是',
+      no: '否',
+      enabled: '已启用',
+      disabled: '已禁用',
+      on: '开启',
+      off: '关闭',
+      footerCredits: 'Dev-Frostty © 2026 版权所有',
+      imageTooLarge: '图片太大。请使用不超过 5MB 的图片。',
     },
   },
 };
 
 /**
  * Retorna a tradução para a chave especificada
- * @param {string} locale - Idioma (pt-BR, en-US, es-ES)
+ * @param {string} locale - Idioma (pt-BR, en-US, es-ES, zh-CN)
  * @param {string} key - Chave de tradução (ex: 'sidebar.startAll')
  * @returns {string} - Texto traduzido
  */

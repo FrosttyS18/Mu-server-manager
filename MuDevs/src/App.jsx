@@ -10,11 +10,12 @@ import { getTranslation } from "./i18n/translations";
 // FLAG DE VERSÃO: Define se é versão ADMIN ou versão de USUÁRIO
 // true = Versão Admin (auto-click ativo por padrão, opção visível)
 // false = Versão Usuário (auto-click oculto e desativado)
-const IS_ADMIN_VERSION = false; // VERSÃO CLIENTE - auto-click desativado
+const IS_ADMIN_VERSION = true; // VERSÃO ADMIN - auto-click ativo
 
 // Tempo padrão (ms) para deixar o executável VISÍVEL após o start.
 // Isso dá tempo de clicar no modal "OK" (MUDEVS) antes do app ocultar a janela.
-const DEFAULT_STARTUP_DELAY_MS = 3500;
+// 4300ms para dar tempo suficiente especialmente para ConnectServer e GameServer
+const DEFAULT_STARTUP_DELAY_MS = 4300;
 
 // Sidebar / Branding (persistente no localStorage)
 const STORAGE_KEYS = {
@@ -22,6 +23,7 @@ const STORAGE_KEYS = {
   logoDataUrl: "msm.logoDataUrl",
   language: "msm.language",
   autoOKDialogs: "msm.autoOKDialogs",
+  startupDelay: "msm.startupDelay",
 };
 
 const DEFAULT_SERVER_NAME = "Novo Nome";
@@ -44,12 +46,22 @@ export default function App() {
   const [isRestartingAll, setIsRestartingAll] = React.useState(false); // Loading state
   
   // Settings States
-  const [language, setLanguage] = React.useState('pt-BR'); // 'pt-BR', 'en-US', 'es-ES'
+  const [language, setLanguage] = React.useState('pt-BR'); // 'pt-BR', 'en-US', 'es-ES', 'zh-CN'
   const [autoOKDialogs, setAutoOKDialogs] = React.useState(false); // Auto-click OK desativado para versão cliente
+  const [startupDelay, setStartupDelay] = React.useState(DEFAULT_STARTUP_DELAY_MS); // Delay configurável pelo usuário (2-5s)
   
   // Função de tradução usando o state diretamente (não usa Context pois o App é quem cria o Provider)
   const t = React.useCallback((key, params = {}) => {
-    return getTranslation(language, key, params);
+    let text = getTranslation(language, key);
+    
+    // Interpolação simples de parâmetros {paramName}
+    if (params && typeof text === 'string') {
+      Object.keys(params).forEach(param => {
+        text = text.replace(`{${param}}`, params[param]);
+      });
+    }
+    
+    return text;
   }, [language]);
   
   // REF para sempre ter acesso aos processos atuais
@@ -103,6 +115,7 @@ React.useEffect(() => {
     const savedLogo = localStorage.getItem(STORAGE_KEYS.logoDataUrl);
     const savedLanguage = localStorage.getItem(STORAGE_KEYS.language);
     const savedAutoOK = localStorage.getItem(STORAGE_KEYS.autoOKDialogs);
+    const savedDelay = localStorage.getItem(STORAGE_KEYS.startupDelay);
 
     if (savedName && typeof savedName === "string") {
       setServerName(savedName);
@@ -119,6 +132,13 @@ React.useEffect(() => {
       setAutoOKDialogs(savedAutoOK === 'true');
     } else if (!IS_ADMIN_VERSION) {
       setAutoOKDialogs(false); // Versão usuário sempre false
+    }
+    // Startup Delay: carrega do localStorage ou usa padrão
+    if (savedDelay) {
+      const delay = Number(savedDelay);
+      if (delay >= 2000 && delay <= 5000) {
+        setStartupDelay(delay);
+      }
     }
   } catch {
     // ignore
@@ -158,15 +178,16 @@ React.useEffect(() => {
   }
 }, [brandingReady, language]);
 
-  // Persistir autoOKDialogs
+  // Persistir autoOKDialogs e startupDelay
   React.useEffect(() => {
-  if (!brandingReady) return;
-  try {
-    localStorage.setItem(STORAGE_KEYS.autoOKDialogs, autoOKDialogs.toString());
-  } catch {
-    // ignore
-  }
-}, [brandingReady, autoOKDialogs]);
+    if (!brandingReady) return;
+    try {
+      localStorage.setItem(STORAGE_KEYS.autoOKDialogs, autoOKDialogs.toString());
+      localStorage.setItem(STORAGE_KEYS.startupDelay, startupDelay.toString());
+    } catch {
+      // ignore
+    }
+  }, [brandingReady, autoOKDialogs, startupDelay]);
 
   const pickLogo = () => logoInputRef.current?.click();
 
@@ -543,6 +564,7 @@ const persistList = React.useCallback((list) => {
     }
 
     // 1) Sempre inicia VISÍVEL para dar tempo de clicar no modal (OK) do executável
+    // Ignora o parâmetro hidden aqui - sempre inicia visível primeiro
     const res = await api.startProcess({ id, path: proc.path, hidden: false });
     
     if (!res?.ok) {
@@ -553,7 +575,13 @@ const persistList = React.useCallback((list) => {
 
     setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: true, windowHidden: false } : p)));
 
-    // 2) Auto Click OK em diálogos MUDevs (se ativado) - UNIVERSAL para TODOS os processos
+      // 2) Delay SEMPRE para dar tempo do modal OK aparecer (mesmo quando vai ocultar depois)
+      // A janela sempre inicia visível, então o modal precisa de tempo para aparecer
+      // Usa o delay configurado pelo usuário (startupDelay) ou o padrão do processo
+      const delay = Number(proc.delayMs ?? startupDelay);
+      if (delay > 0) await sleep(delay);
+
+    // 3) Auto Click OK em diálogos MUDevs (se ativado) - UNIVERSAL para TODOS os processos
     if (autoOKDialogs && res.pid) {
       try {
         if (typeof api.autoClickOK === 'function') {
@@ -573,14 +601,9 @@ const persistList = React.useCallback((list) => {
       }
     }
 
-    // 3) Se você quiser iniciar oculto, esperamos um pouco antes de dar HIDE
-    if (hidden) {
-      const delay = Number(proc.delayMs ?? DEFAULT_STARTUP_DELAY_MS);
-      if (delay > 0) await sleep(delay);
-      await api.hideProcessWindow?.(id);
-      setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, windowHidden: true } : p)));
-    }
-  }, [api, showToast, autoOKDialogs]); // Adicionar autoOKDialogs nas dependencies
+    // REMOVIDO: Auto-hide automático
+    // O usuário controla quando ocultar através do botão do frontend
+  }, [api, showToast, autoOKDialogs, startupDelay]);
 
   const stopOne = React.useCallback(async (id) => {
     const proc = processesRef.current.find((p) => p.id === id);
@@ -610,6 +633,12 @@ const persistList = React.useCallback((list) => {
 
       setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, running: true, windowHidden: false } : p)));
 
+      // Delay SEMPRE para dar tempo do modal OK aparecer (mesmo quando vai ocultar depois)
+      // A janela sempre inicia visível, então o modal precisa de tempo para aparecer
+      // Usa o delay configurado pelo usuário (startupDelay) ou o padrão do processo
+      const delay = Number(proc.delayMs ?? startupDelay);
+      if (delay > 0) await sleep(delay);
+
       // Auto Click OK em diálogos MUDevs (se ativado) - UNIVERSAL para TODOS os processos
       if (autoOKDialogs && res.pid) {
         try {
@@ -630,18 +659,14 @@ const persistList = React.useCallback((list) => {
         }
       }
 
-      if (hidden) {
-        const delay = Number(proc.delayMs ?? DEFAULT_STARTUP_DELAY_MS);
-        if (delay > 0) await sleep(delay);
-        await api.hideProcessWindow?.(id);
-        setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, windowHidden: true } : p)));
-      }
+      // REMOVIDO: Auto-hide automático
+      // O usuário controla quando ocultar através do botão do frontend
       return;
     }
 
-    await stopOne(id);
-    setTimeout(() => startOne(id, { hidden }), 350);
-  }, [api, autoOKDialogs]); // Adicionar autoOKDialogs nas dependencies
+      await stopOne(id);
+      setTimeout(() => startOne(id, { hidden }), 350);
+    }, [api, autoOKDialogs, startupDelay, stopOne, startOne]);
 
 
 const showWindow = React.useCallback(async (id) => {
@@ -2679,6 +2704,22 @@ function ConsoleModal({ logs, onClose, onClear, language, setLanguage, handleLan
                         <div className="text-[10px] text-white/40">ES-ES</div>
                       </div>
                       <span className="text-[13px] font-semibold text-white/60">ES</span>
+                    </button>
+
+                    {/* 中文 / Chinese */}
+                    <button
+                      onClick={() => handleLanguageChange('zh-CN')}
+                      className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${
+                        language === 'zh-CN'
+                          ? 'bg-[#0056B9]/20 border-[#0056B9] shadow-sm'
+                          : 'bg-black/20 border-white/10 hover:border-white/25'
+                      }`}
+                    >
+                      <div className="text-left">
+                        <div className="text-[12px] font-medium text-white">{t('settings.chineseCN')}</div>
+                        <div className="text-[10px] text-white/40">ZH-CN</div>
+                      </div>
+                      <span className="text-[13px] font-semibold text-white/60">CN</span>
                     </button>
                   </div>
                 </div>
