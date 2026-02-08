@@ -1,291 +1,125 @@
-================================================================================
-                        MU SERVER MANAGER - VERSÃO MODERNA
-================================================================================
+# MU Server Manager Modern
 
-Aplicação desktop para Windows que gerencia múltiplos processos de servidores 
-do jogo MU Online com interface moderna, sistema de auto-restart inteligente, 
-monitoramento em tempo real e backup de banco de dados.
+Aplicação desktop para Windows que gerencia múltiplos processos de servidores do jogo MU Online.
 
-================================================================================
-📋 CARACTERÍSTICAS
-================================================================================
+- **Versão do app:** 2.0.0
+- **Distribuição:** MSI (Windows x64)
 
-✅ Gerenciamento completo de processos (Start/Stop/Restart)
-✅ Auto-restart inteligente com sistema de fila
-✅ Monitoramento em tempo real (CPU e RAM)
-✅ Controle de janelas via Win32 API (Show/Hide)
-✅ Backup MySQL e MSSQL
-✅ Interface moderna com tema dark
-✅ Drag & Drop para reordenar processos
-✅ Sistema de notificações (Toast)
-✅ Watchdog para detectar crashes (inclusive pelo Task Manager)
+## Principais recursos
 
-================================================================================
-🏗️ STACK TÉCNICO
-================================================================================
+- Start/Stop/Restart individual e em lote
+- Auto-restart com fila e limite de tentativas
+- Watchdog no processo principal (detecta encerramentos “forçados”)
+- Monitoramento de CPU/RAM por processo
+- Controle de janela via Win32 (mostrar/ocultar)
+- Backup de banco: SQL Server (mssql) e MySQL (mysql2)
+- UI moderna (tema dark, toasts, console de logs, sidebar customizável)
 
-Frontend:  React 19.2.0 + Vite 7.2.4
-Desktop:   Electron 39.2.7
-Styling:   TailwindCSS 4.1.18
-Build:     Electron Builder 25.1.8
+## Stack
 
-Dependências Principais:
-- mssql (12.2.0) - SQL Server
-- mysql2 (3.16.0) - MySQL
-- pidusage (4.0.1) - Monitoramento de processos
-- Native Addons C++ (win-window) - Controle Win32 API
+- Frontend: React 19 + Vite 7
+- Desktop: Electron 39
+- Styling: TailwindCSS 4
+- Build: electron-builder 25 (MSI)
 
-================================================================================
-🚀 INSTALAÇÃO E USO
-================================================================================
+## Requisitos
 
-INSTALAR DEPENDÊNCIAS:
-----------------------
+- Windows 10/11 (x64)
+- Node.js 20+ (recomendado) e npm
+
+Para compilar addons nativos localmente (node-gyp):
+
+- Python 3
+- Visual Studio Build Tools (C++ Desktop)
+
+## Como rodar (dev)
+
+Instale as dependências:
+
+```bash
 npm install
+```
 
-MODO DESENVOLVIMENTO:
----------------------
+Rodar o app em desenvolvimento (Vite + Electron):
+
+```bash
 npm run app
-# Inicia Vite dev server + Electron em modo debug
+```
 
-BUILD PRODUÇÃO:
----------------
+Comandos úteis:
+
+```bash
+npm run dev
+npm run electron
+npm run lint
+```
+
+## Build (MSI)
+
+Gera o build de produção e o instalador MSI:
+
+```bash
 npm run build:electron
-# Gera instalador em: release/Server Manager-1.0.0-Setup.exe
+```
 
-OUTROS COMANDOS:
-----------------
-npm run dev               # Apenas Vite dev server
-npm run build             # Build frontend apenas
-npm run build:electron:dir # Build sem criar instalador
+Saída gerada em:
 
-================================================================================
-📁 ESTRUTURA DO PROJETO
-================================================================================
+- `dist-electron/Server Manager Modern-<version>-Setup.msi`
+- `dist-electron/win-unpacked/` (diretório empacotado, gerado junto do MSI)
 
-mu-server-manager-app/
-├── electron/
-│   ├── main.cjs          # Processo principal (IPC, spawn, watchdog)
-│   ├── preload.cjs       # Bridge seguro (contextBridge)
-│   └── splash.html       # Tela de splash
-├── src/
-│   ├── App.jsx           # Componente principal (3015 linhas)
-│   ├── hooks/
-│   │   ├── useCrashDetection.js  # Auto-restart e fila
-│   │   ├── useProcesses.js       # Gerenciamento de processos
-│   │   ├── useMetrics.js         # Monitoramento CPU/RAM
-│   │   └── useGlowPointer.js     # Efeito spotlight
-│   ├── components/
-│   │   ├── Modals/
-│   │   │   ├── CrashModal.jsx    # Modal de crash com fila
-│   │   │   └── ConfirmModal.jsx  # Modal de confirmação
-│   │   ├── CustomSelect.jsx      # Select customizado
-│   │   └── Icon.jsx              # Componente de ícones
-│   └── assets/           # Imagens e ícones
-├── native/
-│   ├── win-window/       # Addon C++ para Win32 (ShowWindow)
-│   └── hello-addon/      # Addon exemplo
-├── build/
-│   └── icon.ico          # Ícone do app
-├── release/              # Output do build
-├── electron-builder.yml  # Config de build
-└── package.json
+## Estrutura do projeto
 
-================================================================================
-🔧 PROCESSOS GERENCIADOS (PADRÃO)
-================================================================================
+```text
+mu-server-manager-modern-client/
+├─ electron/
+│  ├─ main.cjs            # Processo principal (IPC, spawn, watchdog)
+│  ├─ preload.cjs         # Bridge seguro (contextBridge)
+│  ├─ splash.html
+│  └─ splash.css
+├─ src/
+│  ├─ App.jsx             # UI principal
+│  ├─ main.jsx            # Bootstrap React
+│  ├─ hooks/              # Hooks (crash detection, métricas, etc.)
+│  ├─ components/         # Componentes (modais, ícones, selects)
+│  ├─ i18n/               # Traduções
+│  └─ assets/             # Ícones e imagens
+├─ native/
+│  ├─ win-window/         # Addon C++ (Win32 window control)
+│  └─ hello-addon/        # Addon de exemplo
+├─ build/                 # Recursos do app (ícones)
+├─ scripts/               # Scripts utilitários (geração de ícones)
+├─ electron-builder.yml
+├─ eslint.config.js
+├─ vite.config.js
+├─ package.json
+└─ package-lock.json
+```
 
-1. ChatServe.exe      - Servidor de chat
-2. ConnectServe.exe   - Servidor de conexão
-3. DataServer.exe     - Servidor de dados
-4. ExDataServer.exe   - Servidor de dados estendido
-5. JoinServer.exe     - Servidor de entrada
-6. GameServer.exe     - Servidor principal do jogo
-7. GameServerCS.exe   - Servidor Castle Siege
+Notas:
 
-Nota: Você pode adicionar processos customizados pela interface.
+- `dist/` e `dist-electron/` são saídas de build e não devem ser versionadas.
 
-================================================================================
-⚙️ FUNCIONALIDADES PRINCIPAIS
-================================================================================
+## Electron IPC (contrato)
 
-1. GERENCIAMENTO DE PROCESSOS
-------------------------------
-- Start/Stop/Restart individual
-- Start All/Stop All/Restart All (com delay de 2s)
-- Show All/Hide All Windows (via Win32 API)
-- Drag & Drop para reordenar
-- Adicionar/Remover processos customizados
+Handlers (Main → Renderer):
 
-2. AUTO-RESTART INTELIGENTE
-----------------------------
-- Detecta crashes automaticamente
-- Sistema de fila para múltiplos crashes simultâneos
-- Até 3 tentativas automáticas com countdown (10s normal, 5s se 3+ na fila)
-- Modal de intervenção manual após 3 falhas
-- Watchdog que detecta processos mortos a cada 2s (inclusive Task Manager)
-- Debounce para evitar detecção duplicada
+- `process-start` → inicia processo
+- `process-stop` → para processo
+- `get-process-metrics` → retorna CPU/RAM
+- `show-window` → mostra a janela do processo
+- `hide-window` → oculta a janela do processo
+- `database-backup` → executa backup
 
-3. MONITORAMENTO EM TEMPO REAL
--------------------------------
-- CPU% de cada processo
-- RAM (MB) de cada processo
-- PID e status (Running/Stopped)
-- Atualização a cada 1 segundo
+Events (Main → Renderer):
 
-4. BACKUP DE BANCO DE DADOS
-----------------------------
-- Suporta MySQL e MSSQL
-- Configuração via modal (Host, Port, User, Password, DB)
-- Execução com feedback de progresso
+- `process-exited` → notifica término/crash
 
-5. INTERFACE UI/UX
-------------------
-- Tema dark com gradientes e backdrop blur
-- Spotlight effect (glow que segue o mouse)
-- Toast notifications (máximo 3 simultâneos)
-- Console modal com histórico de logs
-- Sidebar com nome do servidor + logo customizável
-- Persistência de configurações no localStorage
+## Contribuindo
 
-================================================================================
-🔌 ELECTRON IPC API
-================================================================================
+- Abra uma issue descrevendo o problema/feature.
+- Faça um fork e crie uma branch.
+- Rode `npm run lint` antes do PR.
 
-HANDLERS (Main → Renderer):
----------------------------
-- process-start          → Inicia processo
-- process-stop           → Para processo
-- get-process-metrics    → Retorna CPU/RAM
-- show-window            → Mostra janela do processo
-- hide-window            → Oculta janela do processo
-- database-backup        → Executa backup
+## Licença
 
-EVENTS (Main → Renderer):
--------------------------
-- process-exited         → Notifica quando processo termina
-
-================================================================================
-🚨 SOLUÇÃO DE PROBLEMAS
-================================================================================
-
-PROBLEMA: "Cannot find module './lib/...'"
-SOLUÇÃO: Verifique asarUnpack no electron-builder.yml
-
-PROBLEMA: Botões não funcionam
-SOLUÇÃO: Limpe cache (delete node_modules, dist, release) e rebuilde
-
-PROBLEMA: Auto-restart não detecta crashes
-SOLUÇÃO: Confirme que watchdog está rodando (veja console do Electron)
-
-PROBLEMA: Build muito grande
-SOLUÇÃO: Confirme otimizações no electron-builder.yml
-
-PROBLEMA: DevTools aparece em produção
-SOLUÇÃO: Não deve aparecer (já removido do código)
-
-================================================================================
-🎨 ÍCONES E ASSETS
-================================================================================
-
-ÍCONE DO APP (OBRIGATÓRIO):
----------------------------
-Arquivo: build/icon.ico
-Formato: ICO multi-size (16, 32, 48, 64, 128, 256px)
-Como criar: https://icoconvert.com/
-
-O ícone atual já está configurado e pronto para uso.
-
-================================================================================
-📦 BUILD E DISTRIBUIÇÃO
-================================================================================
-
-GERAR INSTALADOR:
------------------
-npm run build:electron
-
-OUTPUT:
--------
-release/Server Manager-1.0.0-Setup.exe  # Instalador
-release/win-unpacked/                   # Versão portátil
-
-TAMANHO APROXIMADO:
--------------------
-Instalador: ~150-200 MB
-Instalado: ~300-400 MB
-
-REQUISITOS DO SISTEMA:
-----------------------
-- Windows 10 ou superior (64-bit)
-- 4 GB RAM mínimo
-- 500 MB espaço em disco
-
-================================================================================
-🔑 INFORMAÇÕES TÉCNICAS IMPORTANTES
-================================================================================
-
-1. STALE CLOSURES:
-------------------
-Este projeto usa processesRef (useRef) para evitar stale closures.
-SEMPRE acesse processes via processesRef.current em callbacks.
-
-2. SISTEMA DE FILA:
--------------------
-- crashQueueRef gerencia crashes múltiplos
-- processingQueueRef evita countdown simultâneo
-- processNextInQueue() processa sequencialmente
-
-3. WATCHDOG:
-------------
-Roda a cada 2s no main process para detectar processos mortos que não
-acionam o event 'exit' (ex: kill pelo Task Manager).
-
-4. NATIVE ADDONS:
------------------
-win-window está configurado em asarUnpack para funcionar em produção.
-Compilado com node-gyp (ABI 140) para Electron 39.
-
-5. DELAY ENTRE STARTS:
-----------------------
-2-3s entre cada processo em "Start All" para evitar race conditions.
-3.5s após start individual para dar tempo do modal MUDEVS aparecer.
-
-================================================================================
-📝 NOTAS DE DESENVOLVIMENTO
-================================================================================
-
-PADRÕES DE CÓDIGO:
-------------------
-- useState para UI state
-- useRef para valores mutáveis (evita stale closures)
-- useCallback para funções que são dependencies
-- useEffect para side effects e cleanup
-
-DEBUGGING:
-----------
-Em desenvolvimento, DevTools abre automaticamente.
-Em produção, DevTools está desabilitado.
-
-PERFORMANCE:
-------------
-- Métricas atualizadas a cada 1s (ajustável)
-- Watchdog roda a cada 2s (ajustável)
-- Toast auto-dismiss após 4s
-- Máximo 50 logs no console modal
-
-================================================================================
-📄 LICENÇA
-================================================================================
-
-Veja LICENSE.txt para detalhes.
-
-================================================================================
-🆘 SUPORTE
-================================================================================
-
-Para problemas, bugs ou sugestões, consulte a documentação completa em:
-RESUMO_PROJETO_MU_SERVER_MANAGER.md (na raiz do projeto)
-
-================================================================================
-Desenvolvido com ❤️ para a comunidade MU Online
-================================================================================
+Veja [LICENSE.txt](./LICENSE.txt).

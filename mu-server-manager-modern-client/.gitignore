@@ -17,6 +17,13 @@ dist-ssr
 release
 out
 
+# Electron Builder (output local)
+dist-electron
+Admin
+*.msi
+*.exe
+*.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
