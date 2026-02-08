@@ -42,3 +42,9 @@ Thumbs.db
 
 # User data
 userData/
+
+# Trae IDE
+.trae/
+trae/
+**/.trae/
+**/trae/
